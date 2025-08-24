@@ -22,6 +22,12 @@
       padding: 10px 20px; border-radius: 10px;
       display: none; z-index: 2000;
     }
+    #debug-log {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      max-height: 40%; overflow:auto;
+      background:#111; color:#0f0; font-size:12px;
+      padding:6px; z-index:3000; text-align:left;
+    }
   </style>
 </head>
 <body>
@@ -35,10 +41,25 @@
 
   <div id="controls"></div>
   <div id="message-box"></div>
+  <div id="debug-log"></div> <!-- Mini console -->
 
   <script type="module">
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
     import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
+
+    function logDebug(msg) {
+      const div = document.getElementById("debug-log");
+      div.innerHTML += msg + "<br>";
+      div.scrollTop = div.scrollHeight; // sempre mostra última linha
+    }
+
+    function showMessage(text, persist=false) {
+      logDebug("MSG: " + text);
+      const msgBox = document.getElementById("message-box");
+      msgBox.textContent = text;
+      msgBox.style.display = "block";
+      if (!persist) setTimeout(() => msgBox.style.display = "none", 3000);
+    }
 
     const ifcLoader = new IFCLoader();
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
@@ -48,15 +69,11 @@
 
     const controlsDiv = document.getElementById("controls");
     const bimEntity = document.getElementById("bim-model");
-    const msgBox = document.getElementById("message-box");
 
     let layers = {};
 
-    function showMessage(text, persist=false) {
-      msgBox.textContent = text;
-      msgBox.style.display = "block";
-      if (!persist) setTimeout(() => msgBox.style.display = "none", 3000);
-    }
+    logDebug("viewer.html iniciado");
+    logDebug("URL recebida: " + ifcUrl);
 
     if (ifcUrl) {
       showMessage("📂 Baixando modelo IFC...", true);
@@ -64,6 +81,9 @@
       ifcLoader.load(
         ifcUrl,
         async (ifcModel) => {
+          logDebug("Modelo carregado com sucesso");
+          showMessage("✅ Modelo carregado!");
+
           layers = {};
           controlsDiv.innerHTML = "";
           bimEntity.innerHTML = "";
@@ -83,7 +103,9 @@
             let ids = [];
             try {
               ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
-            } catch {}
+            } catch (e) {
+              logDebug("Erro ao buscar categoria " + name + ": " + e);
+            }
             if (!ids.length) continue;
 
             const subset = await ifcLoader.ifcManager.createSubset({
@@ -106,20 +128,21 @@
               const vis = layerEntity.getAttribute("visible");
               layerEntity.setAttribute("visible", !vis);
               btn.classList.toggle("active", !vis);
+              logDebug("Camada " + name + " → " + (!vis ? "ON" : "OFF"));
             };
             controlsDiv.appendChild(btn);
           }
-
-          showMessage("✅ Modelo carregado com sucesso!");
         },
         undefined,
         (err) => {
           console.error("Erro IFC:", err);
-          showMessage("❌ Erro ao carregar modelo IFC: " + err.message, true);
+          logDebug("Erro IFC: " + err);
+          showMessage("❌ Erro ao carregar modelo IFC", true);
         }
       );
     } else {
-      showMessage("❌ Nenhum URL fornecido para o modelo IFC", true);
+      showMessage("❌ Nenhum URL fornecido", true);
+      logDebug("Nenhum parâmetro ?url= encontrado");
     }
   </script>
 </body>

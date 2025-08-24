@@ -1,227 +1,165 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>BIM AR - Projeção de Modelo 3D com AR.js</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Importa as bibliotecas necessárias -->
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://unpkg.com/@ar-js-org/ar.js/aframe/build/aframe-ar.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/web-ifc-three/IFCLoader.js"></script>
+  <meta charset="utf-8">
+  <title>BIM AR - Projeção IFC Direto com Camadas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f0f4f8;
-            color: #333;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
+  <!-- Bibliotecas -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://unpkg.com/@ar-js-org/ar.js/aframe/build/aframe-ar.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 
-        #controls {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            background-color: rgba(255, 255, 255, 0.85);
-            padding: 15px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            -webkit-backdrop-filter: blur(5px);
-            backdrop-filter: blur(5px);
-        }
+  <!-- IFC Loader -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
 
-        .control-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-        }
-
-        .control-button {
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fff;
-            background-color: #4c77af;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-        }
-
-        .control-button:hover {
-            background-color: #3b5f8c;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .control-button.active {
-            background-color: #2e4d6d;
-        }
-
-        .control-label {
-            font-size: 14px;
-            color: #555;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        #message-box {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            padding: 10px 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            border-radius: 10px;
-            font-size: 16px;
-            text-align: center;
-            display: none;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-    </style>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; background: #f0f4f8;
+    }
+    #controls {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      z-index: 1000;
+    }
+    #controls button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      background: #ccc;
+    }
+    #controls button.active {
+      background: #4c77af;
+      color: #fff;
+    }
+    #message-box {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 10px;
+      display: none;
+      font-family: sans-serif;
+      z-index: 2000;
+    }
+  </style>
 </head>
 <body>
 
-    <!-- A-Frame Scene -->
-    <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
+  <!-- Cena AR -->
+  <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
+    <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
+      <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
 
-        <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
-            <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
-        </a-marker>
-        
-        <a-entity camera></a-entity>
+  <div id="controls"></div>
+  <div id="message-box"></div>
 
-    </a-scene>
-    
-    <!-- Controles de Camadas -->
-    <div id="controls">
-        <div class="control-group">
-            <button class="control-button active" onclick="toggleLayer('architectural', this)">Arquitetura</button>
-            <button class="control-button" onclick="toggleLayer('electrical', this)">Elétrica</button>
-            <button class="control-button" onclick="toggleLayer('plumbing', this)">Hidráulica</button>
-        </div>
-    </div>
+  <script type="module">
+    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
+    import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
 
-    <!-- Caixa de Mensagem -->
-    <div id="message-box"></div>
+    const ifcLoader = new IFCLoader();
+    ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
-    <script>
-        const ifcLoader = new IFCLoader();
-        let bimModel = null;
-        let layers = {};
+    const marker = document.querySelector("a-marker");
+    const bimEntity = document.getElementById("bim-model");
+    const controlsDiv = document.getElementById("controls");
+    let layers = {};
 
-        // Adiciona um evento para quando o marcador for encontrado
-        document.querySelector('a-marker').addEventListener('markerFound', () => {
-            if (!bimModel) {
-                loadBimModel();
-            }
-        });
+    marker.addEventListener("markerFound", async () => {
+      showMessage("📂 Carregando modelo IFC...");
+      try {
+        const ifcURL = "modelo.ifc"; // Coloque aqui o nome/URL do seu arquivo IFC
+        const ifcModel = await loadIFC(ifcURL);
 
-        async function loadBimModel() {
-            showMessage("Carregando o modelo BIM...");
-            
-            try {
-                // Carrega o arquivo JSON gerado no Passo 1
-                const response = await fetch('layers.json');
-                const modelData = await response.json();
-                
-                bimModel = document.getElementById('bim-model');
-                
-                // Itera sobre as camadas e cria a geometria
-                for (const layerName in modelData) {
-                    const layerData = modelData[layerName];
-                    
-                    // Cria um container para cada camada
-                    const layerEntity = document.createElement('a-entity');
-                    layerEntity.id = `${layerName}-layer`;
-                    layerEntity.setAttribute('visible', layerName === 'architectural');
-                    
-                    // Cria uma malha Three.js a partir dos dados da geometria
-                    const geometry = new THREE.BufferGeometry();
-                    const positions = new Float32Array(layerData.flatMap(g => g.positions));
-                    const colors = new Float32Array(layerData.flatMap(g => g.colors));
-                    const indices = new Uint32Array(layerData.flatMap(g => g.indices));
-                    
-                    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-                    
-                    const material = new THREE.MeshStandardMaterial({
-                        vertexColors: true
-                    });
-                    const mesh = new THREE.Mesh(geometry, material);
-                    
-                    // Adiciona a malha ao container da camada
-                    layerEntity.setObject3D('mesh', mesh);
-                    bimModel.appendChild(layerEntity);
-                    layers[layerName] = layerEntity;
-                }
-                
-                showMessage("Modelo BIM carregado com sucesso!");
-                
-            } catch (error) {
-                console.error("Erro ao carregar o modelo BIM:", error);
-                showMessage("Erro ao carregar o modelo.");
-            }
+        // Categorias IFC principais (pode expandir)
+        const categories = {
+          Paredes: IFC4.IFCWALL,
+          Lajes: IFC4.IFCSLAB,
+          Portas: IFC4.IFCDOOR,
+          Janelas: IFC4.IFCWINDOW,
+          Pilares: IFC4.IFCCOLUMN,
+          Vigas: IFC4.IFCBEAM,
+          Hidráulica: IFC4.IFCFLOWSEGMENT,
+          Elétrica: IFC4.IFCELECTRICALELEMENT
+        };
+
+        // Criar subsets e botões
+        for (const [name, type] of Object.entries(categories)) {
+          const ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+          if (ids.length === 0) continue; // ignora se não existe no modelo
+
+          const subset = await ifcLoader.ifcManager.createSubset({
+            modelID: ifcModel.modelID,
+            ids,
+            scene: ifcModel.parent,
+            removePrevious: false,
+            customID: name
+          });
+
+          const layerEntity = document.createElement("a-entity");
+          layerEntity.setObject3D("mesh", subset);
+          layerEntity.setAttribute("visible", false);
+          bimEntity.appendChild(layerEntity);
+          layers[name] = layerEntity;
+
+          const button = document.createElement("button");
+          button.textContent = name;
+          button.onclick = () => toggleLayer(name, button);
+          controlsDiv.appendChild(button);
         }
 
-        // Função para exibir mensagens temporárias.
-        function showMessage(msg) {
-            const msgBox = document.getElementById('message-box');
-            msgBox.textContent = msg;
-            msgBox.style.display = 'block';
-            setTimeout(() => {
-                msgBox.style.display = 'none';
-            }, 3000);
-        }
+        showMessage("✅ IFC carregado com camadas!");
+      } catch (err) {
+        console.error(err);
+        showMessage("❌ Erro ao carregar IFC.");
+      }
+    });
 
-        // Função para alternar a visibilidade das camadas.
-        function toggleLayer(layerId, button) {
-            const layerEntity = layers[layerId];
-            if (!layerEntity) {
-                showMessage(`Camada não encontrada: ${layerId}`);
-                return;
-            }
+    async function loadIFC(url) {
+      return new Promise((resolve, reject) => {
+        ifcLoader.load(
+          url,
+          (model) => resolve(model),
+          undefined,
+          (err) => reject(err)
+        );
+      });
+    }
 
-            const isVisible = layerEntity.getAttribute('visible');
-            layerEntity.setAttribute('visible', !isVisible);
+    function toggleLayer(layerName, button) {
+      const entity = layers[layerName];
+      if (!entity) return;
+      const visible = entity.getAttribute("visible");
+      entity.setAttribute("visible", !visible);
+      button.classList.toggle("active", !visible);
+    }
 
-            // Alterna a classe 'active' no botão.
-            if (!isVisible) {
-                button.classList.add('active');
-                showMessage(`Camada "${button.textContent}" ativada.`);
-            } else {
-                button.classList.remove('active');
-                showMessage(`Camada "${button.textContent}" desativada.`);
-            }
-        }
+    function showMessage(msg) {
+      const box = document.getElementById("message-box");
+      box.textContent = msg;
+      box.style.display = "block";
+      setTimeout(() => (box.style.display = "none"), 3000);
+    }
+  </script>
 
-        window.addEventListener('load', () => {
-            const sceneEl = document.querySelector('a-scene');
-            if (sceneEl.hasLoaded) {
-                console.log('Cena A-Frame carregada.');
-            } else {
-                sceneEl.addEventListener('loaded', () => {
-                    console.log('Cena A-Frame carregada após o evento.');
-                });
-            }
-        });
-    </script>
 </body>
 </html>

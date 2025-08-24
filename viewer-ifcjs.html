@@ -2,8 +2,9 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>BIM Viewer (IFC.js - UMD)</title>
+  <title>BIM Viewer (web-ifc-three)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
     #viewer-container { width: 100%; height: 100%; }
@@ -20,8 +21,8 @@
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- IFC.js Viewer UMD (funciona no browser puro) -->
-  <script src="https://unpkg.com/ifcjs-3d-viewer@1.0.61/dist/ifc-viewer-api.umd.js"></script>
+  <!-- web-ifc-three UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
 
   <script>
     const msgBox = document.getElementById("message-box");
@@ -30,25 +31,41 @@
       msgBox.textContent = msg;
     }
 
-    const container = document.getElementById("viewer-container");
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById("viewer-container").appendChild(renderer.domElement);
 
-    // agora IfcViewerAPI estará disponível no global
-    const viewer = new IfcViewerAPI({
-      container,
-      backgroundColor: new THREE.Color(0xffffff)
-    });
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 5);
+    scene.add(light);
 
-    viewer.axes.setAxes();
-    viewer.grid.setGrid();
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    camera.position.set(8, 8, 8);
+    controls.update();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // loader IFC
+    const loader = new IFCLoader();
+    loader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
     const urlParams = new URLSearchParams(window.location.search);
     const ifcUrl = urlParams.get("url");
 
     if (ifcUrl) {
       showMessage("📂 Carregando IFC: " + ifcUrl);
-      viewer.IFC.loadIfcUrl(ifcUrl).then(() => {
+      loader.load(ifcUrl, (ifcModel) => {
+        scene.add(ifcModel);
         showMessage("✅ Modelo carregado!");
-      }).catch(err => {
+      }, undefined, (err) => {
         console.error(err);
         showMessage("❌ Erro ao carregar IFC: " + err.message);
       });
@@ -56,5 +73,8 @@
       showMessage("❌ Nenhum URL fornecido (?url=...)");
     }
   </script>
+
+  <!-- OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
 </body>
 </html>

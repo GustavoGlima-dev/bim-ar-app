@@ -5,7 +5,7 @@
   <title>BIM AR - IFC via QR Code</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Bibliotecas AR -->
+  <!-- A-Frame + AR.js -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://unpkg.com/@ar-js-org/ar.js/aframe/build/aframe-ar.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -13,11 +13,15 @@
   <!-- IFC Loader -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
 
-  <!-- QR Code Reader -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- QR Scanner -->
+  <script type="module">
+    import QrScanner from "https://unpkg.com/qr-scanner@1.4.2/qr-scanner.min.js";
+    window.QrScanner = QrScanner;
+  </script>
 
   <style>
     body { margin: 0; padding: 0; background: #f0f4f8; font-family: sans-serif; }
+    video { width: 100%; max-width: 400px; margin: auto; display: block; }
     #controls {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(255, 255, 255, 0.9); padding: 10px;
@@ -33,26 +37,18 @@
       background: rgba(0,0,0,0.7); color: #fff;
       padding: 10px 20px; border-radius: 10px; display: none; z-index: 2000;
     }
-    #reader {
-      width: 350px; margin: auto; margin-top: 30px;
-    }
-    #qr-debug {
-      text-align: center;
-      margin-top: 10px;
-      font-family: monospace;
-      color: #333;
-    }
+    #qr-debug { text-align: center; margin-top: 10px; font-family: monospace; color: #333; }
     #ar-container { display:none; }
   </style>
 </head>
 <body>
 
   <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
-  <div id="reader"></div>
+  <video id="qr-video"></video>
   <div id="qr-debug">Status: aguardando leitura...</div>
   <div id="message-box"></div>
 
-  <!-- Cena AR (inicialmente oculta) -->
+  <!-- Cena AR -->
   <div id="ar-container">
     <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
       <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
@@ -71,7 +67,10 @@
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
     let layers = {};
+    const videoElem = document.getElementById("qr-video");
+    const debugElem = document.getElementById("qr-debug");
 
+    // Corrige link do Drive se for /view
     function normalizeDriveLink(url) {
       if (url.includes("drive.google.com/file/d/")) {
         const match = url.match(/\/d\/([^/]+)\//);
@@ -83,31 +82,29 @@
       return url;
     }
 
-    function onScanSuccess(decodedText) {
-      document.getElementById("qr-debug").innerText = "QR detectado: " + decodedText;
-      if (decodedText.startsWith("http")) {
-        const fixedUrl = normalizeDriveLink(decodedText);
-        html5QrcodeScanner.clear().then(() => {
-          document.getElementById("reader").style.display = "none";
-          document.getElementById("qr-debug").style.display = "none";
+    // Inicia QR Scanner
+    const qrScanner = new QrScanner(
+      videoElem,
+      result => {
+        debugElem.innerText = "QR detectado: " + result.data;
+        if (result.data.startsWith("http")) {
+          const fixedUrl = normalizeDriveLink(result.data);
+          qrScanner.stop();
+          videoElem.style.display = "none";
+          debugElem.style.display = "none";
           document.querySelector("h3").style.display = "none";
           document.getElementById("ar-container").style.display = "block";
           loadIFC(fixedUrl);
-        });
-      }
-    }
-
-    function onScanError(errorMessage) {
-      document.getElementById("qr-debug").innerText = "Erro leitura: " + errorMessage;
-    }
-
-    let html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 30, qrbox: 300, facingMode: "environment" },
-      false
+        }
+      },
+      { preferredCamera: "environment" }
     );
-    html5QrcodeScanner.render(onScanSuccess, onScanError);
 
+    qrScanner.start().catch(e => {
+      debugElem.innerText = "Erro ao iniciar câmera: " + e;
+    });
+
+    // Carregar IFC
     async function loadIFC(url) {
       const bimEntity = document.getElementById("bim-model");
       const controlsDiv = document.getElementById("controls");

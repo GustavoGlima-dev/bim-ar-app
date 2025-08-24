@@ -5,9 +5,10 @@
   <title>BIM Viewer (IFC.js)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- IFC.js Viewer + three.js -->
+  <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.173/dist/ifc-viewer.min.js"></script>
+  <!-- IFC.js Viewer UMD -->
+  <script src="https://unpkg.com/web-ifc-viewer@1.0.173/dist/ifc-viewer-api.umd.js"></script>
 
   <style>
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
@@ -41,17 +42,14 @@
       const container = document.getElementById("viewer-container");
       const viewer = new IfcViewerAPI({ 
         container, 
-        backgroundColor: new THREE.Color(0xffffff) // ✅ corrigido
+        backgroundColor: new THREE.Color(0xffffff) 
       });
 
       viewer.axes.setAxes();
       viewer.grid.setGrid();
 
-      console.log("➡️ Iniciando download do IFC...");
-
       viewer.IFC.loadIfcUrl(ifcUrl)
-        .then((model) => {
-          console.log("✅ Modelo IFC carregado", model);
+        .then(() => {
           showMessage("✅ Modelo carregado!");
         })
         .catch(err => {

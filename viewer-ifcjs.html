@@ -7,7 +7,7 @@
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- IFC.js Viewer UMD (expõe IfcViewerAPI como global) -->
+  <!-- IFC.js Viewer UMD -->
   <script src="https://unpkg.com/web-ifc-viewer@1.0.173/dist/ifc-viewer-api.js"></script>
 
   <style>
@@ -40,7 +40,8 @@
       showMessage("📂 Carregando IFC: " + ifcUrl);
 
       const container = document.getElementById("viewer-container");
-      const viewer = new IfcViewerAPI.Viewer({
+      // ✅ Correção: usar namespace global exposto
+      const viewer = new webIfcViewerAPI.IfcViewerAPI({
         container,
         backgroundColor: new THREE.Color(0xffffff)
       });

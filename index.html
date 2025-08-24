@@ -2,28 +2,88 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Teste QR com jsQR</title>
+  <title>BIM AR - IFC via QR Code (jsQR)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- A-Frame + AR.js -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://unpkg.com/@ar-js-org/ar.js/aframe/build/aframe-ar.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+
+  <!-- IFC Loader -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
+
+  <!-- jsQR -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+
   <style>
-    body { margin:0; font-family:sans-serif; text-align:center; }
+    body { margin:0; font-family:sans-serif; background:#f0f4f8; text-align:center; }
     video, canvas { width:100%; max-width:400px; }
     #output { margin-top:10px; font-weight:bold; }
+    #controls {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9); padding: 10px;
+      border-radius: 12px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 1000;
+    }
+    #controls button {
+      padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: bold; background: #ccc;
+    }
+    #controls button.active { background: #4c77af; color: #fff; }
+    #message-box {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); color: #fff;
+      padding: 10px 20px; border-radius: 10px; display: none; z-index: 2000;
+    }
+    #ar-container { display:none; }
   </style>
 </head>
 <body>
-  <h3>Teste leitura QR</h3>
+
+  <h3>Aponte para o QR Code do arquivo IFC</h3>
   <video id="video" autoplay></video>
   <canvas id="canvas" hidden></canvas>
   <div id="output">Status: aguardando...</div>
+  <div id="message-box"></div>
 
-  <script>
+  <!-- Cena AR -->
+  <div id="ar-container">
+    <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
+      <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
+        <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
+      </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
+    <div id="controls"></div>
+  </div>
+
+  <script type="module">
+    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
+    import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
+
+    const ifcLoader = new IFCLoader();
+    ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
+
+    let layers = {};
+
     const video = document.getElementById("video");
     const canvas = document.getElementById("canvas");
     const output = document.getElementById("output");
     const ctx = canvas.getContext("2d");
 
-    // pede permissão da câmera traseira
+    // Corrige link do Drive se for /view
+    function normalizeDriveLink(url) {
+      if (url.includes("drive.google.com/file/d/")) {
+        const match = url.match(/\/d\/([^/]+)\//);
+        if (match && match[1]) {
+          const fileId = match[1];
+          return `https://drive.google.com/uc?export=download&id=${fileId}`;
+        }
+      }
+      return url;
+    }
+
+    // Inicia câmera
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
         video.srcObject = stream;
@@ -42,9 +102,97 @@
         const code = jsQR(imageData.data, canvas.width, canvas.height);
         if (code) {
           output.innerText = "QR detectado: " + code.data;
+          if (code.data.startsWith("http")) {
+            const fixedUrl = normalizeDriveLink(code.data);
+            // parar câmera
+            video.srcObject.getTracks().forEach(track => track.stop());
+            document.querySelector("h3").style.display = "none";
+            video.style.display = "none";
+            output.style.display = "none";
+            document.getElementById("ar-container").style.display = "block";
+            loadIFC(fixedUrl);
+            return; // não continua scanning
+          }
         }
       }
       requestAnimationFrame(tick);
+    }
+
+    // Carregar IFC
+    async function loadIFC(url) {
+      const bimEntity = document.getElementById("bim-model");
+      const controlsDiv = document.getElementById("controls");
+      showMessage("📂 Carregando IFC...");
+
+      return new Promise((resolve, reject) => {
+        ifcLoader.load(
+          url,
+          async (ifcModel) => {
+            bimEntity.innerHTML = "";
+            layers = {};
+            controlsDiv.innerHTML = "";
+
+            const categories = {
+              Paredes: IFC4.IFCWALL,
+              Lajes: IFC4.IFCSLAB,
+              Portas: IFC4.IFCDOOR,
+              Janelas: IFC4.IFCWINDOW,
+              Pilares: IFC4.IFCCOLUMN,
+              Vigas: IFC4.IFCBEAM,
+              Hidráulica: IFC4.IFCFLOWSEGMENT,
+              Elétrica: IFC4.IFCELECTRICALELEMENT
+            };
+
+            for (const [name, type] of Object.entries(categories)) {
+              const ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+              if (ids.length === 0) continue;
+
+              const subset = await ifcLoader.ifcManager.createSubset({
+                modelID: ifcModel.modelID,
+                ids,
+                scene: ifcModel.parent,
+                removePrevious: false,
+                customID: name
+              });
+
+              const layerEntity = document.createElement("a-entity");
+              layerEntity.setObject3D("mesh", subset);
+              layerEntity.setAttribute("visible", false);
+              bimEntity.appendChild(layerEntity);
+              layers[name] = layerEntity;
+
+              const button = document.createElement("button");
+              button.textContent = name;
+              button.onclick = () => toggleLayer(name, button);
+              controlsDiv.appendChild(button);
+            }
+
+            showMessage("✅ IFC carregado!");
+            resolve();
+          },
+          undefined,
+          (err) => {
+            console.error(err);
+            showMessage("❌ Erro ao carregar IFC.");
+            reject(err);
+          }
+        );
+      });
+    }
+
+    function toggleLayer(layerName, button) {
+      const entity = layers[layerName];
+      if (!entity) return;
+      const visible = entity.getAttribute("visible");
+      entity.setAttribute("visible", !visible);
+      button.classList.toggle("active", !visible);
+    }
+
+    function showMessage(msg) {
+      const box = document.getElementById("message-box");
+      box.textContent = msg;
+      box.style.display = "block";
+      setTimeout(() => (box.style.display = "none"), 3000);
     }
   </script>
 </body>

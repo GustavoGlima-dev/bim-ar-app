@@ -46,15 +46,13 @@
   </style>
 </head>
 <body>
-
-  <!-- Scanner QR -->
-  <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
+  <h3 style="text-align:center;">Escolha a câmera e aponte para o QR Code do arquivo IFC</h3>
+  <select id="camera-select" style="display:block; margin:10px auto; padding:5px;"></select>
   <div id="reader"></div>
   <div id="qr-debug">Status: aguardando inicialização...</div>
   <div id="message-box"></div>
 
-  <!-- Cena AR (inicialmente oculta) -->
-  <div id="ar-container">
+  <div id="ar-container" style="display:none;">
     <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
       <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
         <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
@@ -64,6 +62,7 @@
     <div id="controls"></div>
   </div>
 
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <script type="module">
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
     import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
@@ -71,9 +70,9 @@
     const ifcLoader = new IFCLoader();
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
+    let qrScanner;
     let layers = {};
 
-    // Corrige link do Drive se for formato /view
     function normalizeDriveLink(url) {
       if (url.includes("drive.google.com/file/d/")) {
         const match = url.match(/\/d\/([^/]+)\//);
@@ -85,40 +84,49 @@
       return url;
     }
 
-    // Inicializa scanner QR
-    const qrScanner = new Html5Qrcode("reader");
-    Html5Qrcode.getCameras().then(devices => {
-      if (devices && devices.length) {
-        // tenta usar câmera traseira (última da lista)
-        const cameraId = devices[devices.length - 1].id;
-
-        qrScanner.start(
-          cameraId,
-          { fps: 10, qrbox: 250 },
-          qrCodeMessage => {
-            document.getElementById("qr-debug").innerText = "QR detectado: " + qrCodeMessage;
-
-            if (qrCodeMessage.startsWith("http")) {
-              const fixedUrl = normalizeDriveLink(qrCodeMessage);
-
-              // Para scanner e abre AR
-              qrScanner.stop();
-              document.getElementById("reader").style.display = "none";
-              document.getElementById("qr-debug").style.display = "none";
-              document.querySelector("h3").style.display = "none";
-              document.getElementById("ar-container").style.display = "block";
-
-              // Carrega IFC
-              loadIFC(fixedUrl);
-            }
-          },
-          errorMessage => {
-            document.getElementById("qr-debug").innerText = "Erro leitura: " + errorMessage;
+    function startScanner(cameraId) {
+      if (qrScanner) {
+        qrScanner.stop().catch(() => {});
+      }
+      qrScanner = new Html5Qrcode("reader");
+      qrScanner.start(
+        cameraId,
+        { fps: 10, qrbox: 250 },
+        qrCodeMessage => {
+          document.getElementById("qr-debug").innerText = "QR detectado: " + qrCodeMessage;
+          if (qrCodeMessage.startsWith("http")) {
+            const fixedUrl = normalizeDriveLink(qrCodeMessage);
+            qrScanner.stop();
+            document.getElementById("reader").style.display = "none";
+            document.getElementById("camera-select").style.display = "none";
+            document.querySelector("h3").style.display = "none";
+            document.getElementById("qr-debug").style.display = "none";
+            document.getElementById("ar-container").style.display = "block";
+            loadIFC(fixedUrl);
           }
-        ).catch(err => {
-          document.getElementById("qr-debug").innerText = "Falha ao iniciar scanner: " + err;
-        });
+        },
+        errorMessage => {
+          document.getElementById("qr-debug").innerText = "Erro leitura: " + errorMessage;
+        }
+      ).catch(err => {
+        document.getElementById("qr-debug").innerText = "Falha ao iniciar: " + err;
+      });
+    }
 
+    Html5Qrcode.getCameras().then(devices => {
+      const select = document.getElementById("camera-select");
+      if (devices && devices.length) {
+        devices.forEach((cam, i) => {
+          const opt = document.createElement("option");
+          opt.value = cam.id;
+          opt.text = cam.label || `Câmera ${i+1}`;
+          select.appendChild(opt);
+        });
+        // inicia com a primeira por padrão
+        startScanner(select.value);
+        select.addEventListener("change", e => {
+          startScanner(e.target.value);
+        });
       } else {
         document.getElementById("qr-debug").innerText = "Nenhuma câmera encontrada";
       }
@@ -126,20 +134,16 @@
       document.getElementById("qr-debug").innerText = "Erro acesso câmera: " + err;
     });
 
-    // Carregar IFC e criar camadas
     async function loadIFC(url) {
       const bimEntity = document.getElementById("bim-model");
       const controlsDiv = document.getElementById("controls");
-      showMessage("📂 Carregando IFC...");
+      controlsDiv.innerHTML = "";
+      bimEntity.innerHTML = "";
 
       return new Promise((resolve, reject) => {
         ifcLoader.load(
           url,
           async (ifcModel) => {
-            bimEntity.innerHTML = "";
-            layers = {};
-            controlsDiv.innerHTML = "";
-
             const categories = {
               Paredes: IFC4.IFCWALL,
               Lajes: IFC4.IFCSLAB,
@@ -174,14 +178,11 @@
               button.onclick = () => toggleLayer(name, button);
               controlsDiv.appendChild(button);
             }
-
-            showMessage("✅ IFC carregado!");
             resolve();
           },
           undefined,
           (err) => {
-            console.error(err);
-            showMessage("❌ Erro ao carregar IFC.");
+            document.getElementById("qr-debug").innerText = "Erro ao carregar IFC: " + err;
             reject(err);
           }
         );
@@ -194,13 +195,6 @@
       const visible = entity.getAttribute("visible");
       entity.setAttribute("visible", !visible);
       button.classList.toggle("active", !visible);
-    }
-
-    function showMessage(msg) {
-      const box = document.getElementById("message-box");
-      box.textContent = msg;
-      box.style.display = "block";
-      setTimeout(() => (box.style.display = "none"), 3000);
     }
   </script>
 </body>

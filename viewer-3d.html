@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BIM 3D Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
+  <style>
+    #controls {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.9); padding: 10px; border-radius: 12px;
+      display: flex; flex-wrap: wrap; gap: 8px; z-index: 1000;
+    }
+    #controls button { padding:8px 14px; border:none; border-radius:8px; background:#ccc; }
+    #controls button.active { background:#4c77af; color:#fff; }
+    #message-box {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; padding: 10px 20px;
+      border-radius: 10px; z-index: 2000;
+    }
+  </style>
+</head>
+<body>
+  <a-scene embedded>
+    <a-entity id="bim-model" position="0 0 -5" scale="0.1 0.1 0.1"></a-entity>
+    <a-entity camera look-controls></a-entity>
+  </a-scene>
+
+  <div id="controls"></div>
+  <div id="message-box">Iniciando...</div>
+
+  <script type="module">
+    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
+    import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
+
+    function showMessage(msg) {
+      const box = document.getElementById("message-box");
+      box.textContent = msg;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const ifcUrl = params.get("url");
+
+    if (!ifcUrl) {
+      showMessage("❌ Nenhum URL de IFC recebido");
+    } else {
+      showMessage("📂 Baixando IFC de: " + ifcUrl);
+
+      const ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
+
+      const bimEntity = document.getElementById("bim-model");
+      const controlsDiv = document.getElementById("controls");
+
+      ifcLoader.load(
+        ifcUrl,
+        async (ifcModel) => {
+          showMessage("✅ IFC carregado!");
+
+          const categories = {
+            Paredes: IFC4.IFCWALL,
+            Lajes: IFC4.IFCSLAB,
+            Portas: IFC4.IFCDOOR,
+            Janelas: IFC4.IFCWINDOW,
+            Pilares: IFC4.IFCCOLUMN,
+            Vigas: IFC4.IFCBEAM,
+            Hidráulica: IFC4.IFCFLOWSEGMENT,
+            Elétrica: IFC4.IFCELECTRICALELEMENT
+          };
+
+          for (const [name, type] of Object.entries(categories)) {
+            let ids = [];
+            try {
+              ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+            } catch {}
+            if (!ids.length) continue;
+
+            const subset = await ifcLoader.ifcManager.createSubset({
+              modelID: ifcModel.modelID, ids, scene: ifcModel.parent,
+              removePrevious: false, customID: name
+            });
+
+            const layerEntity = document.createElement("a-entity");
+            layerEntity.setObject3D("mesh", subset);
+            layerEntity.setAttribute("visible", true);
+            bimEntity.appendChild(layerEntity);
+
+            const btn = document.createElement("button");
+            btn.textContent = name;
+            btn.classList.add("active");
+            btn.onclick = () => {
+              const vis = layerEntity.getAttribute("visible");
+              layerEntity.setAttribute("visible", !vis);
+              btn.classList.toggle("active", !vis);
+            };
+            controlsDiv.appendChild(btn);
+          }
+        },
+        undefined,
+        (err) => {
+          console.error("Erro IFC:", err);
+          showMessage("❌ Erro ao carregar IFC: " + err.message);
+        }
+      );
+    }
+  </script>
+</body>
+</html>

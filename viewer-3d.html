@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- Carregar pacote web-ifc-three completo -->
-  <script src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
+  <!-- build UMD do web-ifc-three -->
+  <script src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/build/web-ifc-three.min.js"></script>
   <style>
     #message-box {
       position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -40,7 +40,7 @@
       showMessage("📂 Baixando IFC de: " + ifcUrl);
 
       try {
-        const loader = new IFCLoader();
+        const loader = new webIfcThree.IFCLoader();
         loader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
         loader.load(

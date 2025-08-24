@@ -20,7 +20,7 @@
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- IFC.js Viewer (UMD empacotado, funciona direto no navegador) -->
+  <!-- IFC.js Viewer UMD (versão estável sem dependências externas) -->
   <script src="https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.73/dist/ifc-viewer-api.umd.js"></script>
 
   <script>
@@ -30,7 +30,6 @@
       msgBox.textContent = msg;
     }
 
-    // Inicializa viewer
     const container = document.getElementById("viewer-container");
     const viewer = new IfcViewerAPI.ViewerAPI({
       container,
@@ -40,7 +39,6 @@
     viewer.axes.setAxes();
     viewer.grid.setGrid();
 
-    // Lê parâmetro ?url=...
     const urlParams = new URLSearchParams(window.location.search);
     const ifcUrl = urlParams.get("url");
 

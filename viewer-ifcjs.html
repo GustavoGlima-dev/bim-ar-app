@@ -4,12 +4,6 @@
   <meta charset="UTF-8" />
   <title>BIM Viewer (IFC.js)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- IFC.js Viewer UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.173/umd/ifc-viewer-api.umd.js"></script>
-
   <style>
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
     #viewer-container { width: 100%; height: 100%; }
@@ -24,38 +18,38 @@
   <div id="viewer-container"></div>
   <div id="message-box">Iniciando...</div>
 
-  <script>
+  <script type="module">
+    import { IfcViewerAPI } from "https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.173/dist/index.js";
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js";
+
     const msgBox = document.getElementById("message-box");
     function showMessage(msg) {
       console.log(msg);
       msgBox.textContent = msg;
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const ifcUrl = params.get("url");
+    const container = document.getElementById("viewer-container");
+    const viewer = new IfcViewerAPI({
+      container,
+      backgroundColor: new THREE.Color(0xffffff)
+    });
 
-    if (!ifcUrl) {
-      showMessage("❌ Nenhum URL fornecido (?url=...)");
-    } else {
+    viewer.axes.setAxes();
+    viewer.grid.setGrid();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const ifcUrl = urlParams.get("url");
+
+    if (ifcUrl) {
       showMessage("📂 Carregando IFC: " + ifcUrl);
-
-      const container = document.getElementById("viewer-container");
-      const viewer = new IfcViewerAPI({
-        container,
-        backgroundColor: new THREE.Color(0xffffff)
+      viewer.IFC.loadIfcUrl(ifcUrl).then(() => {
+        showMessage("✅ Modelo carregado!");
+      }).catch(err => {
+        console.error(err);
+        showMessage("❌ Erro ao carregar IFC: " + err.message);
       });
-
-      viewer.axes.setAxes();
-      viewer.grid.setGrid();
-
-      viewer.IFC.loadIfcUrl(ifcUrl)
-        .then(() => {
-          showMessage("✅ Modelo carregado!");
-        })
-        .catch(err => {
-          console.error("❌ Erro:", err);
-          showMessage("❌ Erro ao carregar IFC: " + err.message);
-        });
+    } else {
+      showMessage("❌ Nenhum URL fornecido (?url=...)");
     }
   </script>
 </body>

@@ -36,6 +36,12 @@
     #reader {
       width: 300px; margin: auto; margin-top: 50px;
     }
+    #qr-debug {
+      text-align: center;
+      margin-top: 10px;
+      font-family: monospace;
+      color: #333;
+    }
     #ar-container { display:none; }
   </style>
 </head>
@@ -44,6 +50,7 @@
   <!-- Scanner QR -->
   <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
   <div id="reader"></div>
+  <div id="qr-debug">QR detectado: nenhum</div>
   <div id="message-box"></div>
 
   <!-- Cena AR (inicialmente oculta) -->
@@ -66,7 +73,7 @@
 
     let layers = {};
 
-    // Função que converte qualquer link do Drive em link direto
+    // Corrige link do Drive se for formato /view
     function normalizeDriveLink(url) {
       if (url.includes("drive.google.com/file/d/")) {
         const match = url.match(/\/d\/([^/]+)\//);
@@ -75,7 +82,7 @@
           return `https://drive.google.com/uc?export=download&id=${fileId}`;
         }
       }
-      return url; // se não for Drive, retorna o mesmo
+      return url;
     }
 
     // Inicializa scanner QR
@@ -87,25 +94,30 @@
           cameraId,
           { fps: 10, qrbox: 250 },
           qrCodeMessage => {
-            console.log("QR detectado:", qrCodeMessage);
+            document.getElementById("qr-debug").innerText = "QR detectado: " + qrCodeMessage;
 
             if (qrCodeMessage.startsWith("http")) {
+              const fixedUrl = normalizeDriveLink(qrCodeMessage);
+
+              // Para scanner e abre AR
               qrScanner.stop();
               document.getElementById("reader").style.display = "none";
+              document.getElementById("qr-debug").style.display = "none";
               document.querySelector("h3").style.display = "none";
               document.getElementById("ar-container").style.display = "block";
 
-              const fixedUrl = normalizeDriveLink(qrCodeMessage);
+              // Carrega IFC
               loadIFC(fixedUrl);
-            } else {
-              showMessage("⚠️ QR Code não contém link válido");
             }
+          },
+          errorMessage => {
+            // erros de leitura podem ser ignorados
           }
         );
       }
     });
 
-    // Função para carregar IFC e criar camadas
+    // Carregar IFC e criar camadas
     async function loadIFC(url) {
       const bimEntity = document.getElementById("bim-model");
       const controlsDiv = document.getElementById("controls");

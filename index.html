@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>BIM AR - Projeção IFC Direto com Camadas</title>
+  <title>BIM AR - IFC via QR Code</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Bibliotecas -->
+  <!-- Bibliotecas AR -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://unpkg.com/@ar-js-org/ar.js/aframe/build/aframe-ar.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -13,49 +13,30 @@
   <!-- IFC Loader -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js"></script>
 
+  <!-- QR Code Reader -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
-    body {
-      margin: 0; padding: 0;
-      display: flex; justify-content: center; align-items: center;
-      height: 100vh; background: #f0f4f8;
-    }
+    body { margin: 0; padding: 0; background: #f0f4f8; }
     #controls {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
-      padding: 10px;
-      border-radius: 12px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      z-index: 1000;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9); padding: 10px;
+      border-radius: 12px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 1000;
     }
     #controls button {
-      padding: 8px 14px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-      background: #ccc;
+      padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: bold; background: #ccc;
     }
-    #controls button.active {
-      background: #4c77af;
-      color: #fff;
-    }
+    #controls button.active { background: #4c77af; color: #fff; }
     #message-box {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 10px;
-      display: none;
-      font-family: sans-serif;
-      z-index: 2000;
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.7); color: #fff;
+      padding: 10px 20px; border-radius: 10px; display: none; z-index: 2000;
+    }
+    #reader {
+      position: fixed; top: 10px; right: 10px; width: 120px; height: 120px;
+      border: 2px solid #4c77af; border-radius: 8px; background: #fff;
+      z-index: 3000;
     }
   </style>
 </head>
@@ -71,6 +52,7 @@
 
   <div id="controls"></div>
   <div id="message-box"></div>
+  <div id="reader"></div> <!-- scanner QR -->
 
   <script type="module">
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
@@ -79,72 +61,73 @@
     const ifcLoader = new IFCLoader();
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
-    const marker = document.querySelector("a-marker");
     const bimEntity = document.getElementById("bim-model");
     const controlsDiv = document.getElementById("controls");
     let layers = {};
 
-    marker.addEventListener("markerFound", async () => {
-      showMessage("📂 Carregando modelo IFC...");
-      try {
-        const ifcURL = "modelo.ifc"; // Coloque aqui o nome/URL do seu arquivo IFC
-        const ifcModel = await loadIFC(ifcURL);
-
-        // Categorias IFC principais (pode expandir)
-        const categories = {
-          Paredes: IFC4.IFCWALL,
-          Lajes: IFC4.IFCSLAB,
-          Portas: IFC4.IFCDOOR,
-          Janelas: IFC4.IFCWINDOW,
-          Pilares: IFC4.IFCCOLUMN,
-          Vigas: IFC4.IFCBEAM,
-          Hidráulica: IFC4.IFCFLOWSEGMENT,
-          Elétrica: IFC4.IFCELECTRICALELEMENT
-        };
-
-        // Criar subsets e botões
-        for (const [name, type] of Object.entries(categories)) {
-          const ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
-          if (ids.length === 0) continue; // ignora se não existe no modelo
-
-          const subset = await ifcLoader.ifcManager.createSubset({
-            modelID: ifcModel.modelID,
-            ids,
-            scene: ifcModel.parent,
-            removePrevious: false,
-            customID: name
-          });
-
-          const layerEntity = document.createElement("a-entity");
-          layerEntity.setObject3D("mesh", subset);
-          layerEntity.setAttribute("visible", false);
-          bimEntity.appendChild(layerEntity);
-          layers[name] = layerEntity;
-
-          const button = document.createElement("button");
-          button.textContent = name;
-          button.onclick = () => toggleLayer(name, button);
-          controlsDiv.appendChild(button);
-        }
-
-        showMessage("✅ IFC carregado com camadas!");
-      } catch (err) {
-        console.error(err);
-        showMessage("❌ Erro ao carregar IFC.");
-      }
-    });
-
+    // Função principal: carrega IFC e separa em camadas
     async function loadIFC(url) {
+      showMessage("📂 Carregando IFC: " + url);
+
       return new Promise((resolve, reject) => {
         ifcLoader.load(
           url,
-          (model) => resolve(model),
+          async (ifcModel) => {
+            // Limpa entidades anteriores
+            bimEntity.innerHTML = "";
+            layers = {};
+            controlsDiv.innerHTML = "";
+
+            // Categorias principais
+            const categories = {
+              Paredes: IFC4.IFCWALL,
+              Lajes: IFC4.IFCSLAB,
+              Portas: IFC4.IFCDOOR,
+              Janelas: IFC4.IFCWINDOW,
+              Pilares: IFC4.IFCCOLUMN,
+              Vigas: IFC4.IFCBEAM,
+              Hidráulica: IFC4.IFCFLOWSEGMENT,
+              Elétrica: IFC4.IFCELECTRICALELEMENT
+            };
+
+            for (const [name, type] of Object.entries(categories)) {
+              const ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+              if (ids.length === 0) continue;
+
+              const subset = await ifcLoader.ifcManager.createSubset({
+                modelID: ifcModel.modelID,
+                ids,
+                scene: ifcModel.parent,
+                removePrevious: false,
+                customID: name
+              });
+
+              const layerEntity = document.createElement("a-entity");
+              layerEntity.setObject3D("mesh", subset);
+              layerEntity.setAttribute("visible", false);
+              bimEntity.appendChild(layerEntity);
+              layers[name] = layerEntity;
+
+              const button = document.createElement("button");
+              button.textContent = name;
+              button.onclick = () => toggleLayer(name, button);
+              controlsDiv.appendChild(button);
+            }
+
+            showMessage("✅ IFC carregado com sucesso!");
+            resolve();
+          },
           undefined,
-          (err) => reject(err)
+          (err) => {
+            console.error(err);
+            showMessage("❌ Erro ao carregar IFC.");
+            reject(err);
+          }
         );
       });
     }
 
+    // Alternar visibilidade
     function toggleLayer(layerName, button) {
       const entity = layers[layerName];
       if (!entity) return;
@@ -153,13 +136,36 @@
       button.classList.toggle("active", !visible);
     }
 
+    // Mensagens temporárias
     function showMessage(msg) {
       const box = document.getElementById("message-box");
       box.textContent = msg;
       box.style.display = "block";
       setTimeout(() => (box.style.display = "none"), 3000);
     }
-  </script>
 
+    // Inicializa leitor de QR Code
+    const qrScanner = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        const cameraId = devices[0].id;
+        qrScanner.start(
+          cameraId,
+          { fps: 10, qrbox: 120 },
+          qrCodeMessage => {
+            console.log("QR detectado:", qrCodeMessage);
+            if (qrCodeMessage.includes(".ifc")) {
+              loadIFC(qrCodeMessage);
+            } else {
+              showMessage("⚠️ QR Code não é um IFC.");
+            }
+          },
+          errorMessage => {
+            // Erros de leitura podem ser ignorados
+          }
+        );
+      }
+    });
+  </script>
 </body>
 </html>

@@ -47,7 +47,6 @@
 </head>
 <body>
 
-  <!-- Scanner QR -->
   <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
   <div id="reader"></div>
   <div id="qr-debug">Status: aguardando leitura...</div>
@@ -73,7 +72,6 @@
 
     let layers = {};
 
-    // Corrige link do Drive se for formato /view
     function normalizeDriveLink(url) {
       if (url.includes("drive.google.com/file/d/")) {
         const match = url.match(/\/d\/([^/]+)\//);
@@ -85,14 +83,10 @@
       return url;
     }
 
-    // Inicializa scanner com interface pronta
-    function onScanSuccess(decodedText, decodedResult) {
+    function onScanSuccess(decodedText) {
       document.getElementById("qr-debug").innerText = "QR detectado: " + decodedText;
-
       if (decodedText.startsWith("http")) {
         const fixedUrl = normalizeDriveLink(decodedText);
-
-        // Fecha scanner
         html5QrcodeScanner.clear().then(() => {
           document.getElementById("reader").style.display = "none";
           document.getElementById("qr-debug").style.display = "none";
@@ -109,12 +103,11 @@
 
     let html5QrcodeScanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 30, qrbox: 300, facingMode: { exact: "environment" } },
+      { fps: 30, qrbox: 300, facingMode: "environment" },
       false
     );
     html5QrcodeScanner.render(onScanSuccess, onScanError);
 
-    // Carregar IFC e criar camadas
     async function loadIFC(url) {
       const bimEntity = document.getElementById("bim-model");
       const controlsDiv = document.getElementById("controls");

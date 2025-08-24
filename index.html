@@ -17,7 +17,7 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    body { margin: 0; padding: 0; background: #f0f4f8; }
+    body { margin: 0; padding: 0; background: #f0f4f8; font-family: sans-serif; }
     #controls {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(255, 255, 255, 0.9); padding: 10px;
@@ -50,7 +50,7 @@
   <!-- Scanner QR -->
   <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
   <div id="reader"></div>
-  <div id="qr-debug">QR detectado: nenhum</div>
+  <div id="qr-debug">Status: aguardando inicialização...</div>
   <div id="message-box"></div>
 
   <!-- Cena AR (inicialmente oculta) -->
@@ -89,7 +89,9 @@
     const qrScanner = new Html5Qrcode("reader");
     Html5Qrcode.getCameras().then(devices => {
       if (devices && devices.length) {
-        const cameraId = devices[0].id;
+        // tenta usar câmera traseira (última da lista)
+        const cameraId = devices[devices.length - 1].id;
+
         qrScanner.start(
           cameraId,
           { fps: 10, qrbox: 250 },
@@ -111,10 +113,17 @@
             }
           },
           errorMessage => {
-            // erros de leitura podem ser ignorados
+            document.getElementById("qr-debug").innerText = "Erro leitura: " + errorMessage;
           }
-        );
+        ).catch(err => {
+          document.getElementById("qr-debug").innerText = "Falha ao iniciar scanner: " + err;
+        });
+
+      } else {
+        document.getElementById("qr-debug").innerText = "Nenhuma câmera encontrada";
       }
+    }).catch(err => {
+      document.getElementById("qr-debug").innerText = "Erro acesso câmera: " + err;
     });
 
     // Carregar IFC e criar camadas

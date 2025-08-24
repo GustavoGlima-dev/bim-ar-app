@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Teste IFC URL</h1>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get("url");
+    document.body.innerHTML += "<p>URL recebida: " + url + "</p>";
+    fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(txt => {
+        document.body.innerHTML += "<p>Arquivo baixado, tamanho: " + txt.length + " caracteres</p>";
+      })
+      .catch(err => {
+        document.body.innerHTML += "<p>❌ Erro: " + err.message + "</p>";
+      });
+  </script>
+</body>
+</html>

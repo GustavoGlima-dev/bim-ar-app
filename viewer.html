@@ -16,6 +16,12 @@
     }
     #controls button { padding:8px 14px; border:none; border-radius:8px; background:#ccc; }
     #controls button.active { background:#4c77af; color:#fff; }
+    #message-box {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff;
+      padding: 10px 20px; border-radius: 10px;
+      display: none; z-index: 2000;
+    }
   </style>
 </head>
 <body>
@@ -26,7 +32,9 @@
     </a-marker>
     <a-entity camera></a-entity>
   </a-scene>
+
   <div id="controls"></div>
+  <div id="message-box"></div>
 
   <script type="module">
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
@@ -34,28 +42,58 @@
 
     const ifcLoader = new IFCLoader();
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
+
     const urlParams = new URLSearchParams(window.location.search);
     const ifcUrl = urlParams.get("url");
+
     const controlsDiv = document.getElementById("controls");
     const bimEntity = document.getElementById("bim-model");
+    const msgBox = document.getElementById("message-box");
+
     let layers = {};
 
+    function showMessage(text, persist=false) {
+      msgBox.textContent = text;
+      msgBox.style.display = "block";
+      if (!persist) setTimeout(() => msgBox.style.display = "none", 3000);
+    }
+
     if (ifcUrl) {
+      showMessage("📂 Baixando modelo IFC...", true);
+
       ifcLoader.load(
         ifcUrl,
         async (ifcModel) => {
+          layers = {};
+          controlsDiv.innerHTML = "";
+          bimEntity.innerHTML = "";
+
           const categories = {
-            Paredes: IFC4.IFCWALL, Lajes: IFC4.IFCSLAB, Portas: IFC4.IFCDOOR,
-            Janelas: IFC4.IFCWINDOW, Pilares: IFC4.IFCCOLUMN, Vigas: IFC4.IFCBEAM,
-            Hidráulica: IFC4.IFCFLOWSEGMENT, Elétrica: IFC4.IFCELECTRICALELEMENT
+            Paredes: IFC4.IFCWALL,
+            Lajes: IFC4.IFCSLAB,
+            Portas: IFC4.IFCDOOR,
+            Janelas: IFC4.IFCWINDOW,
+            Pilares: IFC4.IFCCOLUMN,
+            Vigas: IFC4.IFCBEAM,
+            Hidráulica: IFC4.IFCFLOWSEGMENT,
+            Elétrica: IFC4.IFCELECTRICALELEMENT
           };
+
           for (const [name, type] of Object.entries(categories)) {
-            const ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+            let ids = [];
+            try {
+              ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+            } catch {}
             if (!ids.length) continue;
+
             const subset = await ifcLoader.ifcManager.createSubset({
-              modelID: ifcModel.modelID, ids, scene: ifcModel.parent,
-              removePrevious:false, customID:name
+              modelID: ifcModel.modelID,
+              ids,
+              scene: ifcModel.parent,
+              removePrevious: false,
+              customID: name
             });
+
             const layerEntity = document.createElement("a-entity");
             layerEntity.setObject3D("mesh", subset);
             layerEntity.setAttribute("visible", false);
@@ -71,10 +109,17 @@
             };
             controlsDiv.appendChild(btn);
           }
+
+          showMessage("✅ Modelo carregado com sucesso!");
         },
         undefined,
-        err => console.error("Erro IFC:", err)
+        (err) => {
+          console.error("Erro IFC:", err);
+          showMessage("❌ Erro ao carregar modelo IFC: " + err.message, true);
+        }
       );
+    } else {
+      showMessage("❌ Nenhum URL fornecido para o modelo IFC", true);
     }
   </script>
 </body>

@@ -22,28 +22,12 @@
       gap: 8px;
       z-index: 1000;
     }
-    #controls button {
-      padding: 8px 14px;
-      border: none;
-      border-radius: 8px;
-      background: #ccc;
-      cursor: pointer;
-    }
-    #controls button.active {
-      background: #4c77af;
-      color: #fff;
-    }
+    #controls button { padding: 8px 14px; border:none; border-radius:8px; background:#ccc; cursor:pointer; }
+    #controls button.active { background:#4c77af; color:#fff; }
     #message-box {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.75);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 10px;
-      z-index: 2000;
-      font-family: sans-serif;
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); color: #fff; padding: 10px 20px; border-radius: 10px;
+      z-index: 2000; font-family: sans-serif;
     }
   </style>
 </head>
@@ -51,7 +35,6 @@
   <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
     <a-marker type="pattern"
       url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
-      <!-- Escala maior -->
       <a-entity id="bim-model" position="0 0 0" scale="0.1 0.1 0.1"></a-entity>
     </a-marker>
     <a-entity camera></a-entity>
@@ -60,18 +43,84 @@
   <div id="controls"></div>
   <div id="message-box">Iniciando...</div>
 
-  <script>
-  const urlParams = new URLSearchParams(window.location.search);
-  const ifcUrl = urlParams.get("url");
+  <script type="module">
+    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
+    import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
 
-  const box = document.getElementById("message-box");
+    const msgBox = document.getElementById("message-box");
+    function showMessage(text) {
+      console.log("MSG:", text);
+      msgBox.textContent = text;
+      msgBox.style.display = "block";
+    }
 
-  if (ifcUrl) {
-    box.textContent = "✅ URL recebida: " + ifcUrl;
-  } else {
-    box.textContent = "❌ Nenhum parâmetro ?url= encontrado";
-  }
-</script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const ifcUrl = urlParams.get("url");
 
+    if (!ifcUrl) {
+      showMessage("❌ Nenhum URL de IFC recebido");
+    } else {
+      showMessage("📂 URL recebida: " + ifcUrl);
+
+      const ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
+
+      const bimEntity = document.getElementById("bim-model");
+      const controlsDiv = document.getElementById("controls");
+
+      ifcLoader.load(
+        ifcUrl,
+        async (ifcModel) => {
+          showMessage("✅ IFC carregado com sucesso");
+
+          const categories = {
+            Paredes: IFC4.IFCWALL,
+            Lajes: IFC4.IFCSLAB,
+            Portas: IFC4.IFCDOOR,
+            Janelas: IFC4.IFCWINDOW,
+            Pilares: IFC4.IFCCOLUMN,
+            Vigas: IFC4.IFCBEAM,
+            Hidráulica: IFC4.IFCFLOWSEGMENT,
+            Elétrica: IFC4.IFCELECTRICALELEMENT
+          };
+
+          for (const [name, type] of Object.entries(categories)) {
+            let ids = [];
+            try {
+              ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
+            } catch (e) {
+              console.warn("Erro ao buscar " + name, e);
+            }
+            if (!ids.length) continue;
+
+            const subset = await ifcLoader.ifcManager.createSubset({
+              modelID: ifcModel.modelID, ids, scene: ifcModel.parent,
+              removePrevious: false, customID: name
+            });
+
+            const layerEntity = document.createElement("a-entity");
+            layerEntity.setObject3D("mesh", subset);
+            layerEntity.setAttribute("visible", true);
+            bimEntity.appendChild(layerEntity);
+
+            const btn = document.createElement("button");
+            btn.textContent = name;
+            btn.classList.add("active");
+            btn.onclick = () => {
+              const vis = layerEntity.getAttribute("visible");
+              layerEntity.setAttribute("visible", !vis);
+              btn.classList.toggle("active", !vis);
+            };
+            controlsDiv.appendChild(btn);
+          }
+        },
+        undefined,
+        (err) => {
+          console.error("Erro IFC:", err);
+          showMessage("❌ Erro ao carregar IFC: " + err.message);
+        }
+      );
+    }
+  </script>
 </body>
 </html>

@@ -34,25 +34,28 @@
       padding: 10px 20px; border-radius: 10px; display: none; z-index: 2000;
     }
     #reader {
-      position: fixed; top: 10px; right: 10px; width: 120px; height: 120px;
-      border: 2px solid #4c77af; border-radius: 8px; background: #fff;
-      z-index: 3000;
+      width: 300px; margin: auto; margin-top: 50px;
     }
+    #ar-container { display:none; }
   </style>
 </head>
 <body>
 
-  <!-- Cena AR -->
-  <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
-    <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
-      <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
-    </a-marker>
-    <a-entity camera></a-entity>
-  </a-scene>
-
-  <div id="controls"></div>
+  <!-- Scanner QR -->
+  <h3 style="text-align:center;">Aponte para o QR Code do arquivo IFC</h3>
+  <div id="reader"></div>
   <div id="message-box"></div>
-  <div id="reader"></div> <!-- scanner QR -->
+
+  <!-- Cena AR (inicialmente oculta) -->
+  <div id="ar-container">
+    <a-scene embedded arjs="sourceType: webcam; detectionMode: mono_and_multi; patternRatio: 0.5;">
+      <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/pattern-marker.patt">
+        <a-entity id="bim-model" position="0 0 0" scale="0.01 0.01 0.01"></a-entity>
+      </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
+    <div id="controls"></div>
+  </div>
 
   <script type="module">
     import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
@@ -61,19 +64,42 @@
     const ifcLoader = new IFCLoader();
     ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
 
-    const bimEntity = document.getElementById("bim-model");
-    const controlsDiv = document.getElementById("controls");
     let layers = {};
 
-    // Função principal: carrega IFC e separa em camadas
+    // Inicializa scanner QR
+    const qrScanner = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length) {
+        const cameraId = devices[0].id;
+        qrScanner.start(
+          cameraId,
+          { fps: 10, qrbox: 250 },
+          qrCodeMessage => {
+            console.log("QR detectado:", qrCodeMessage);
+            if (qrCodeMessage.includes(".ifc")) {
+              qrScanner.stop();
+              document.getElementById("reader").style.display = "none";
+              document.querySelector("h3").style.display = "none";
+              document.getElementById("ar-container").style.display = "block";
+              loadIFC(qrCodeMessage);
+            } else {
+              showMessage("⚠️ QR Code não contém link para IFC");
+            }
+          }
+        );
+      }
+    });
+
+    // Função para carregar IFC e criar camadas
     async function loadIFC(url) {
-      showMessage("📂 Carregando IFC: " + url);
+      const bimEntity = document.getElementById("bim-model");
+      const controlsDiv = document.getElementById("controls");
+      showMessage("📂 Carregando IFC...");
 
       return new Promise((resolve, reject) => {
         ifcLoader.load(
           url,
           async (ifcModel) => {
-            // Limpa entidades anteriores
             bimEntity.innerHTML = "";
             layers = {};
             controlsDiv.innerHTML = "";
@@ -114,7 +140,7 @@
               controlsDiv.appendChild(button);
             }
 
-            showMessage("✅ IFC carregado com sucesso!");
+            showMessage("✅ IFC carregado!");
             resolve();
           },
           undefined,
@@ -127,7 +153,6 @@
       });
     }
 
-    // Alternar visibilidade
     function toggleLayer(layerName, button) {
       const entity = layers[layerName];
       if (!entity) return;
@@ -136,36 +161,12 @@
       button.classList.toggle("active", !visible);
     }
 
-    // Mensagens temporárias
     function showMessage(msg) {
       const box = document.getElementById("message-box");
       box.textContent = msg;
       box.style.display = "block";
       setTimeout(() => (box.style.display = "none"), 3000);
     }
-
-    // Inicializa leitor de QR Code
-    const qrScanner = new Html5Qrcode("reader");
-    Html5Qrcode.getCameras().then(devices => {
-      if (devices && devices.length) {
-        const cameraId = devices[0].id;
-        qrScanner.start(
-          cameraId,
-          { fps: 10, qrbox: 120 },
-          qrCodeMessage => {
-            console.log("QR detectado:", qrCodeMessage);
-            if (qrCodeMessage.includes(".ifc")) {
-              loadIFC(qrCodeMessage);
-            } else {
-              showMessage("⚠️ QR Code não é um IFC.");
-            }
-          },
-          errorMessage => {
-            // Erros de leitura podem ser ignorados
-          }
-        );
-      }
-    });
   </script>
 </body>
 </html>

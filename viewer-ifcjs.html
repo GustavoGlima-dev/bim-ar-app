@@ -19,11 +19,20 @@
   <div id="message-box">Iniciando...</div>
 
   <script type="module">
-    import { IfcViewerAPI } from "https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.168/dist/ifc-viewer-api.es.js";
+    import { IfcViewerAPI } from "https://cdn.jsdelivr.net/npm/web-ifc-viewer@1.0.168/dist/ifc-viewer-api.js";
     import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js";
 
+    const msgBox = document.getElementById("message-box");
+    function showMessage(msg) {
+      console.log(msg);
+      msgBox.textContent = msg;
+    }
+
     const container = document.getElementById("viewer-container");
-    const viewer = new IfcViewerAPI({ container, backgroundColor: new THREE.Color(0xffffff) });
+    const viewer = new IfcViewerAPI({
+      container,
+      backgroundColor: new THREE.Color(0xffffff)
+    });
 
     viewer.axes.setAxes();
     viewer.grid.setGrid();
@@ -32,9 +41,15 @@
     const ifcUrl = urlParams.get("url");
 
     if (ifcUrl) {
-        viewer.IFC.loadIfcUrl(ifcUrl).then(() => {
-        console.log("✅ Modelo carregado!");
-        }).catch(err => console.error("❌ Erro ao carregar IFC:", err));
+      showMessage("📂 Carregando IFC: " + ifcUrl);
+      viewer.IFC.loadIfcUrl(ifcUrl).then(() => {
+        showMessage("✅ Modelo carregado!");
+      }).catch(err => {
+        console.error(err);
+        showMessage("❌ Erro ao carregar IFC: " + err.message);
+      });
+    } else {
+      showMessage("❌ Nenhum URL fornecido (?url=...)");
     }
   </script>
 </body>

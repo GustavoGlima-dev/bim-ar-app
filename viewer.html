@@ -60,86 +60,18 @@
   <div id="controls"></div>
   <div id="message-box">Iniciando...</div>
 
-  <script type="module">
-    import { IFCLoader } from "https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.41/IFCLoader.js";
-    import { IFC4 } from "https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/web-ifc-api.js";
+  <script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const ifcUrl = urlParams.get("url");
 
-    function showMessage(text) {
-      const box = document.getElementById("message-box");
-      box.textContent = text;
-      box.style.display = "block";
-    }
+  const box = document.getElementById("message-box");
 
-    const ifcLoader = new IFCLoader();
-    ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.41/");
+  if (ifcUrl) {
+    box.textContent = "✅ URL recebida: " + ifcUrl;
+  } else {
+    box.textContent = "❌ Nenhum parâmetro ?url= encontrado";
+  }
+</script>
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const ifcUrl = urlParams.get("url");
-
-    const controlsDiv = document.getElementById("controls");
-    const bimEntity = document.getElementById("bim-model");
-    let layers = {};
-
-    if (ifcUrl) {
-      showMessage("📂 Baixando IFC...");
-
-      ifcLoader.load(
-        ifcUrl,
-        async (ifcModel) => {
-          showMessage("✅ Modelo carregado!");
-
-          const categories = {
-            Paredes: IFC4.IFCWALL,
-            Lajes: IFC4.IFCSLAB,
-            Portas: IFC4.IFCDOOR,
-            Janelas: IFC4.IFCWINDOW,
-            Pilares: IFC4.IFCCOLUMN,
-            Vigas: IFC4.IFCBEAM,
-            Hidráulica: IFC4.IFCFLOWSEGMENT,
-            Elétrica: IFC4.IFCELECTRICALELEMENT
-          };
-
-          for (const [name, type] of Object.entries(categories)) {
-            let ids = [];
-            try {
-              ids = await ifcLoader.ifcManager.getAllItemsOfType(ifcModel.modelID, type, true);
-            } catch {}
-            if (!ids.length) continue;
-
-            const subset = await ifcLoader.ifcManager.createSubset({
-              modelID: ifcModel.modelID,
-              ids,
-              scene: ifcModel.parent,
-              removePrevious: false,
-              customID: name
-            });
-
-            const layerEntity = document.createElement("a-entity");
-            layerEntity.setObject3D("mesh", subset);
-            layerEntity.setAttribute("visible", true); // 🔥 visível por padrão
-            bimEntity.appendChild(layerEntity);
-            layers[name] = layerEntity;
-
-            const btn = document.createElement("button");
-            btn.textContent = name;
-            btn.classList.add("active"); // botão marcado por padrão
-            btn.onclick = () => {
-              const vis = layerEntity.getAttribute("visible");
-              layerEntity.setAttribute("visible", !vis);
-              btn.classList.toggle("active", !vis);
-            };
-            controlsDiv.appendChild(btn);
-          }
-        },
-        undefined,
-        (err) => {
-          console.error("Erro IFC:", err);
-          showMessage("❌ Erro ao carregar IFC");
-        }
-      );
-    } else {
-      showMessage("❌ Nenhum URL de IFC recebido");
-    }
-  </script>
 </body>
 </html>

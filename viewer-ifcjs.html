@@ -20,8 +20,8 @@
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-  <!-- IFC.js Viewer UMD (versão estável do ifcjs-3d-viewer) -->
-  <script src="https://cdn.jsdelivr.net/npm/ifcjs-3d-viewer@1.0.73/dist/ifc-viewer-api.umd.js"></script>
+  <!-- IFC.js Viewer UMD (funciona no browser puro) -->
+  <script src="https://unpkg.com/ifcjs-3d-viewer@1.0.61/dist/ifc-viewer-api.umd.js"></script>
 
   <script>
     const msgBox = document.getElementById("message-box");
@@ -32,7 +32,7 @@
 
     const container = document.getElementById("viewer-container");
 
-    // agora IfcViewerAPI existe no global
+    // agora IfcViewerAPI estará disponível no global
     const viewer = new IfcViewerAPI({
       container,
       backgroundColor: new THREE.Color(0xffffff)

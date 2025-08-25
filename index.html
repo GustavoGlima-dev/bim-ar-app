@@ -1,98 +1,217 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visualizador GLTF/GLB com GPS AR</title>
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js com GPS -->
-  <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
-  <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    .container {
-      position: absolute; top: 0; left: 0; right: 0;
-      z-index: 9999;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 20px; text-align: center;
-    }
-    .upload-button {
-      background-color: #2563eb;
-      color: white;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1rem;
-      font-weight: 600;
-    }
-    .status-message { margin-top: 10px; font-size: 1rem; color: #0891b2; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador GLTF em AR</title>
+    <!-- A-Frame - Framework para Web VR/AR -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via CDN. -->
+    <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #1e293b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #0c4a6e;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-button, .start-ar-button {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .upload-button:hover, .start-ar-button:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .status-message {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #0891b2;
+        }
+
+        #marker-info {
+            margin-top: 20px;
+            background-color: #f0f9ff;
+            border: 1px dashed #7dd3fc;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #marker-img {
+            max-width: 150px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+
+        #ar-scene {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
 </head>
 <body>
-  <div class="container" id="ui">
-    <h1>Visualizador GLTF/GLB com GPS</h1>
-    <p>Selecione um arquivo e o modelo aparecerá na coordenada definida.</p>
-    <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
-    <input type="file" id="fileInput" accept=".gltf,.glb" style="display:none">
-    <div class="status-message" id="status"></div>
-  </div>
+    <div class="container" id="app-container">
+        <h1>Visualizador BIM em Realidade Aumentada</h1>
+        <p>
+            Selecione um arquivo .GLTF para visualizar o modelo em realidade aumentada.
+        </p>
+        <p>
+            Após o carregamento, você precisará apontar a câmara do seu dispositivo para o marcador abaixo.
+        </p>
+        
+        <label for="fileInput" class="upload-button">
+            Selecionar Arquivo .GLTF
+        </label>
+        <input type="file" id="fileInput" accept=".gltf, .glb">
+        
+        <div class="status-message" id="status"></div>
 
-  <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
-  >
-    <!-- Container do modelo em coordenada GPS -->
-    <a-entity
-      id="model-container"
-      gps-entity-place="latitude: -23.55052; longitude: -46.633308;" <!-- Ajuste para a coordenada desejada -->
-      scale="5 5 5"
-    ></a-entity>
+        <div id="marker-info">
+            <p><strong>Marque essa imagem para visualizar o modelo:</strong></p>
+            <img id="marker-img" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.png" alt="NFT-based marker">
+            <br>
+            <button id="startArButton" class="start-ar-button">Iniciar Projeção AR</button>
+        </div>
+    </div>
 
-    <!-- Câmera com GPS -->
-    <a-camera gps-camera rotation-reader></a-camera>
-  </a-scene>
+    <!-- A cena A-Frame para realidade aumentada -->
+    <a-scene 
+        id="ar-scene" 
+        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
+    >
+        <!-- Marcador baseado em NFT. O modelo 3D será projetado sobre esta imagem. -->
+        <a-marker-nft
+            type="nft" 
+            url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.nft"
+        >
+            <a-entity
+                id="model-container" 
+                scale="0.005 0.005 0.005" 
+                rotation="-90 0 0"
+            ></a-entity>
+        </a-marker-nft>
+        <a-entity camera></a-entity>
+    </a-scene>
 
-  <script>
-    const fileInput = document.getElementById("fileInput");
-    const statusDiv = document.getElementById("status");
-    const modelContainer = document.getElementById("model-container");
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileInput = document.getElementById('fileInput');
+            const statusDiv = document.getElementById('status');
+            const markerInfo = document.getElementById('marker-info');
+            const arScene = document.getElementById('ar-scene');
+            const appContainer = document.getElementById('app-container');
+            const modelContainer = document.getElementById('model-container');
+            const startArButton = document.getElementById('startArButton');
+            
+            function showStatus(message) {
+                statusDiv.innerText = message;
+            }
 
-    function showStatus(msg) { statusDiv.innerText = msg; }
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
 
-    fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      showStatus("Carregando modelo...");
+                showStatus('Processando arquivo... isso pode levar alguns segundos.');
+                
+                try {
+                    // Cria uma URL temporária para o ficheiro carregado
+                    const modelUrl = URL.createObjectURL(file);
 
-      try {
-        const modelUrl = URL.createObjectURL(file);
+                    // Remove qualquer modelo anterior
+                    while (modelContainer.firstChild) {
+                        modelContainer.removeChild(modelContainer.firstChild);
+                    }
 
-        // Remove modelos anteriores
-        while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
+                    // Cria o elemento A-Frame e define a origem para a URL do ficheiro
+                    const model = document.createElement('a-gltf-model');
+                    model.setAttribute('src', modelUrl);
+                    model.setAttribute('animation-mixer', '');
+                    model.setAttribute('position', '0 0.5 0'); // Posição do modelo
+                    model.setAttribute('scale', '1 1 1');
 
-        const model = document.createElement("a-entity");
-        model.setAttribute("gltf-model", modelUrl);
-        model.setAttribute("scale", "0.05 0.05 0.05");
-        model.setAttribute("animation-mixer", "");
+                    // Adiciona um listener para saber quando o modelo está carregado
+                    model.addEventListener('model-loaded', () => {
+                        showStatus('Modelo carregado com sucesso! Clique em "Iniciar Projeção AR".');
+                        markerInfo.style.display = 'block';
+                    });
 
-        model.addEventListener("model-loaded", () => {
-          showStatus("Modelo carregado! Caminhe até as coordenadas para vê-lo.");
+                    model.addEventListener('model-error', (error) => {
+                        console.error('Erro ao carregar o modelo:', error);
+                        // Limpa a URL temporária para evitar vazamento de memória
+                        URL.revokeObjectURL(modelUrl);
+                        showStatus('Ocorreu um erro ao carregar o modelo. O formato do ficheiro pode não ser válido.');
+                    });
+
+                    modelContainer.appendChild(model);
+
+                } catch (error) {
+                    console.error('Erro ao processar o arquivo GLTF:', error);
+                    showStatus('Ocorreu um erro ao carregar o modelo. Por favor, tente novamente.');
+                }
+            });
+
+            startArButton.addEventListener('click', async () => {
+                // Tenta aceder à câmara antes de iniciar a cena AR
+                try {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                    appContainer.style.display = 'none';
+                    arScene.style.display = 'block';
+                } catch (error) {
+                    showStatus('Erro: Não foi possível aceder à câmara. Por favor, permita o acesso e tente novamente.');
+                    console.error('Erro ao aceder à câmara:', error);
+                }
+            });
         });
-
-        model.addEventListener("error", (err) => {
-          console.error("Erro ao carregar modelo:", err);
-          showStatus("Erro: não foi possível carregar este arquivo.");
-        });
-
-        modelContainer.appendChild(model);
-
-      } catch (err) {
-        console.error(err);
-        showStatus("Falha ao processar o arquivo.");
-      }
-    });
-  </script>
+    </script>
 </body>
 </html>

@@ -6,8 +6,8 @@
     <title>Visualizador BIM em AR</title>
     <!-- A-Frame - Framework para Web VR/AR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via unpkg. -->
-    <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
+    <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via CDN. -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <!-- IFC.js - Biblioteca para ler e converter arquivos IFC no navegador. -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.38/web-ifc-api.js"></script>
     <style>
@@ -179,6 +179,11 @@
                     // Neste exemplo simulado, demonstramos o fluxo carregando um modelo glTF.
                     // Para o seu uso, você substituiria esta parte pela lógica do IFC.js.
 
+                    // Remove qualquer modelo anterior
+                    while (modelContainer.firstChild) {
+                        modelContainer.removeChild(modelContainer.firstChild);
+                    }
+
                     // Exemplo de como um modelo glTF é carregado com A-Frame
                     const model = document.createElement('a-gltf-model');
                     model.setAttribute('src', IFC_ASSET_URL);
@@ -188,10 +193,10 @@
 
                     modelContainer.appendChild(model);
 
-                    showStatus('Modelo carregado com sucesso! Aponte para o marcador.');
+                    showStatus('Modelo carregado com sucesso! Aponte para o marcador. Se a câmara não iniciar, verifique as permissões do navegador.');
                     markerInfo.style.display = 'block';
-                    arScene.style.display = 'block';
                     appContainer.style.display = 'none';
+                    arScene.style.display = 'block';
 
                 } catch (error) {
                     console.error('Erro ao processar o arquivo IFC:', error);

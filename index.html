@@ -11,6 +11,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
             color: #1e293b;
             display: flex;
             flex-direction: column;
@@ -23,6 +24,7 @@
         }
 
         .container {
+            background-color: #ffffff;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
             padding: 30px;
@@ -46,7 +48,7 @@
             display: none;
         }
 
-        .upload-button, .start-ar-button {
+        .upload-button {
             background-color: #2563eb;
             color: white;
             padding: 12px 24px;
@@ -61,7 +63,7 @@
             text-align: center;
         }
 
-        .upload-button:hover, .start-ar-button:hover {
+        .upload-button:hover {
             background-color: #1d4ed8;
             transform: translateY(-2px);
         }
@@ -75,6 +77,7 @@
 
         #marker-info {
             margin-top: 20px;
+            background-color: #f0f9ff;
             border: 1px dashed #7dd3fc;
             padding: 15px;
             border-radius: 8px;
@@ -114,8 +117,6 @@
         <div id="marker-info">
             <p><strong>Marque essa imagem para visualizar o modelo:</strong></p>
             <img id="marker-img" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.png" alt="NFT-based marker">
-            <br>
-            <button id="startArButton" class="start-ar-button">Iniciar Projeção AR</button>
         </div>
     </div>
 
@@ -124,6 +125,10 @@
         id="ar-scene" 
         arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
     >
+        <a-assets>
+            <video id="video-source" autoplay style="display:none;"></video>
+        </a-assets>
+
         <!-- Marcador baseado em NFT. O modelo 3D será projetado sobre esta imagem. -->
         <a-marker-nft
             type="nft" 
@@ -146,11 +151,27 @@
             const arScene = document.getElementById('ar-scene');
             const appContainer = document.getElementById('app-container');
             const modelContainer = document.getElementById('model-container');
-            const startArButton = document.getElementById('startArButton');
-            
+            const videoSource = document.getElementById('video-source');
+
             function showStatus(message) {
                 statusDiv.innerText = message;
             }
+
+            // Ativa a câmara e atribui o fluxo ao elemento de vídeo
+            async function startCamera() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    videoSource.srcObject = stream;
+                    arScene.setAttribute('arjs', 'sourceType: video; sourceUrl: #video-source;');
+                    showStatus('Câmara ativada! Por favor, selecione um ficheiro .GLTF.');
+                } catch (error) {
+                    showStatus('Erro: Não foi possível aceder à câmara. Por favor, permita o acesso.');
+                    console.error('Erro ao aceder à câmara:', error);
+                }
+            }
+
+            // Inicia a câmara assim que a página é carregada
+            startCamera();
 
             fileInput.addEventListener('change', (event) => {
                 const file = event.target.files[0];
@@ -159,7 +180,7 @@
                 }
 
                 showStatus('Processando arquivo... isso pode levar alguns segundos.');
-                
+
                 try {
                     // Cria uma URL temporária para o ficheiro carregado
                     const modelUrl = URL.createObjectURL(file);
@@ -178,8 +199,10 @@
 
                     // Adiciona um listener para saber quando o modelo está carregado
                     model.addEventListener('model-loaded', () => {
-                        showStatus('Modelo carregado com sucesso! Clique em "Iniciar Projeção AR".');
+                        showStatus('Modelo carregado com sucesso! Aponte para o marcador e a projeção irá começar.');
                         markerInfo.style.display = 'block';
+                        appContainer.style.display = 'none';
+                        arScene.style.display = 'block';
                     });
 
                     model.addEventListener('model-error', (error) => {
@@ -187,6 +210,8 @@
                         // Limpa a URL temporária para evitar vazamento de memória
                         URL.revokeObjectURL(modelUrl);
                         showStatus('Ocorreu um erro ao carregar o modelo. O formato do ficheiro pode não ser válido.');
+                        arScene.style.display = 'none';
+                        appContainer.style.display = 'block';
                     });
 
                     modelContainer.appendChild(model);
@@ -194,18 +219,6 @@
                 } catch (error) {
                     console.error('Erro ao processar o arquivo GLTF:', error);
                     showStatus('Ocorreu um erro ao carregar o modelo. Por favor, tente novamente.');
-                }
-            });
-
-            startArButton.addEventListener('click', async () => {
-                // Tenta aceder à câmara antes de iniciar a cena AR
-                try {
-                    await navigator.mediaDevices.getUserMedia({ video: true });
-                    appContainer.style.display = 'none';
-                    arScene.style.display = 'block';
-                } catch (error) {
-                    showStatus('Erro: Não foi possível aceder à câmara. Por favor, permita o acesso e tente novamente.');
-                    console.error('Erro ao aceder à câmara:', error);
                 }
             });
         });

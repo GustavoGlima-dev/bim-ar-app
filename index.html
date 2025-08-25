@@ -201,8 +201,15 @@
             });
 
             startArButton.addEventListener('click', async () => {
-                appContainer.style.display = 'none';
-                arScene.style.display = 'block';
+                // Tenta aceder à câmara antes de iniciar a cena AR
+                try {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                    appContainer.style.display = 'none';
+                    arScene.style.display = 'block';
+                } catch (error) {
+                    showStatus('Erro: Não foi possível aceder à câmara. Por favor, permita o acesso e tente novamente.');
+                    console.error('Erro ao aceder à câmara:', error);
+                }
             });
         });
     </script>

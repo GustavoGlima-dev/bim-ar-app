@@ -125,10 +125,6 @@
         id="ar-scene" 
         arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
     >
-        <a-assets>
-            <video id="video-source" autoplay style="display:none;"></video>
-        </a-assets>
-
         <!-- Marcador baseado em NFT. O modelo 3D será projetado sobre esta imagem. -->
         <a-marker-nft
             type="nft" 
@@ -151,27 +147,10 @@
             const arScene = document.getElementById('ar-scene');
             const appContainer = document.getElementById('app-container');
             const modelContainer = document.getElementById('model-container');
-            const videoSource = document.getElementById('video-source');
 
             function showStatus(message) {
                 statusDiv.innerText = message;
             }
-
-            // Ativa a câmara e atribui o fluxo ao elemento de vídeo
-            async function startCamera() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    videoSource.srcObject = stream;
-                    arScene.setAttribute('arjs', 'sourceType: video; sourceUrl: #video-source;');
-                    showStatus('Câmara ativada! Por favor, selecione um ficheiro .GLTF.');
-                } catch (error) {
-                    showStatus('Erro: Não foi possível aceder à câmara. Por favor, permita o acesso.');
-                    console.error('Erro ao aceder à câmara:', error);
-                }
-            }
-
-            // Inicia a câmara assim que a página é carregada
-            startCamera();
 
             fileInput.addEventListener('change', (event) => {
                 const file = event.target.files[0];

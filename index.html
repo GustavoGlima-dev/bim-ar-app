@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visualizador IFC em AR</title>
   
-  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-  <!-- Three.js e IFC.js -->
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
     import { IFCLoader } from 'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.152/IFCLoader.js';
@@ -28,6 +25,14 @@
         statusDiv.innerText = msg;
       }
 
+      // Adicione um visualizador e uma cena Three.js para o IFCLoader
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer();
+
+      const ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.46/"); // Configure o caminho para o arquivo WASM
+
       fileInput.addEventListener("change", async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -40,51 +45,61 @@
         showStatus("Processando arquivo IFC... aguarde.");
 
         try {
-          const loader = new IFCLoader();
-          const ifcURL = URL.createObjectURL(file);
+          const fileReader = new FileReader();
+          fileReader.onload = (e) => {
+            const buffer = e.target.result;
+            const uint8Array = new Uint8Array(buffer);
 
-          // Criar uma cena Three.js temporária para exportação
-          const scene = new THREE.Scene();
+            // Carregue o modelo IFC
+            ifcLoader.load(uint8Array, (ifcModel) => {
+              const tempScene = new THREE.Scene();
+              tempScene.add(ifcModel);
 
-          loader.load(ifcURL, (ifcModel) => {
-            scene.add(ifcModel);
+              // Exporte para glTF
+              const exporter = new GLTFExporter();
+              exporter.parse(
+                tempScene,
+                (gltf) => {
+                  let blob;
+                  if (gltf instanceof ArrayBuffer) {
+                    blob = new Blob([gltf], { type: "application/octet-stream" });
+                  } else {
+                    blob = new Blob([JSON.stringify(gltf)], { type: "application/json" });
+                  }
 
-            // Exportar para glTF
-            const exporter = new GLTFExporter();
-            exporter.parse(
-              scene,
-              (gltf) => {
-                let blob;
-                if (gltf instanceof ArrayBuffer) {
-                  blob = new Blob([gltf], { type: "application/octet-stream" });
-                } else {
-                  blob = new Blob([JSON.stringify(gltf)], { type: "application/json" });
-                }
+                  const url = URL.createObjectURL(blob);
 
-                const url = URL.createObjectURL(blob);
+                  // Limpar modelos anteriores
+                  while (modelContainer.firstChild) {
+                    modelContainer.removeChild(modelContainer.firstChild);
+                  }
 
-                // Limpar modelos anteriores
-                while (modelContainer.firstChild) {
-                  modelContainer.removeChild(modelContainer.firstChild);
-                }
+                  // Criar entidade A-Frame para o modelo convertido
+                  const model = document.createElement("a-gltf-model");
+                  model.setAttribute("src", url);
+                  model.setAttribute("position", "0 0.5 0");
+                  model.setAttribute("scale", "1 1 1"); // Ajuste a escala para o novo container
 
-                // Criar entidade A-Frame para o modelo convertido
-                const model = document.createElement("a-gltf-model");
-                model.setAttribute("src", url);
-                model.setAttribute("position", "0 0.5 0");
-                model.setAttribute("scale", "0.01 0.01 0.01");
+                  modelContainer.appendChild(model);
 
-                modelContainer.appendChild(model);
-
-                // Atualizar UI
-                showStatus("Modelo convertido e carregado com sucesso! Aponte para o marcador.");
-                markerInfo.style.display = "block";
-                appContainer.style.display = "none";
-                arScene.style.display = "block";
-              },
-              { binary: true } // true = .glb binário
-            );
-          });
+                  // Atualizar UI
+                  showStatus("Modelo convertido e carregado com sucesso! Aponte para o marcador.");
+                  markerInfo.style.display = "block";
+                  appContainer.style.display = "none";
+                  arScene.style.display = "block";
+                },
+                (error) => {
+                  console.error("Erro ao exportar para glTF:", error);
+                  showStatus("Erro ao exportar o modelo IFC para glTF.");
+                },
+                { binary: true } // true = .glb binário
+              );
+            }, (error) => {
+              console.error("Erro ao carregar o arquivo IFC:", error);
+              showStatus("Erro ao carregar o arquivo IFC. Verifique se é válido.");
+            });
+          };
+          fileReader.readAsArrayBuffer(file);
         } catch (err) {
           console.error(err);
           showStatus("Erro ao processar o arquivo IFC.");
@@ -127,10 +142,9 @@
     </div>
   </div>
 
-  <!-- Cena A-Frame -->
   <a-scene id="ar-scene" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
     <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/pattern-files/hiro.patt">
-      <a-entity id="model-container" scale="0.01 0.01 0.01"></a-entity>
+      <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="0.1 0.1 0.1"></a-entity>
     </a-marker>
     <a-entity camera></a-entity>
   </a-scene>

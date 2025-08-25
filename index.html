@@ -3,118 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador GLTF em AR Sem Marcador</title>
-    <!-- A-Frame - Framework para Web VR/AR -->
+    <title>Visualizador GLTF Interativo em AR</title>
+    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via CDN. -->
+    <!-- AR.js para AR sem marcador -->
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f0f4f8;
-            color: #1e293b;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
             margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        .container {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            z-index: 9999;
+            background: rgba(255,255,255,0.95);
             padding: 20px;
             text-align: center;
         }
-
-        .container {
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            max-width: 600px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        h1 {
-            color: #0c4a6e;
-            margin-bottom: 20px;
-            font-size: 1.8rem;
-        }
-
-        p {
-            margin-bottom: 15px;
-            line-height: 1.6;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
+        h1 { font-size: 1.4rem; margin: 0 0 10px; }
         .upload-button {
             background-color: #2563eb;
             color: white;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            transition: background-color 0.3s, transform 0.2s;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            text-align: center;
         }
-
-        .upload-button:hover {
-            background-color: #1d4ed8;
-            transform: translateY(-2px);
-        }
-
-        .status-message {
-            margin-top: 20px;
-            font-size: 1.1rem;
-            font-weight: 500;
-            color: #0891b2;
-        }
-
-        #ar-scene {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-        }
+        .status-message { margin-top: 10px; font-size: 1rem; color: #0891b2; }
     </style>
 </head>
 <body>
     <div class="container" id="app-container">
-        <h1>Visualizador BIM em Realidade Aumentada</h1>
-        <p>
-            Selecione um arquivo .GLTF para visualizar o modelo em realidade aumentada.
-        </p>
-        <p>
-            Após o carregamento, a câmara irá ligar automaticamente.
-        </p>
-        
-        <label for="fileInput" class="upload-button">
-            Selecionar Arquivo .GLTF
-        </label>
-        <input type="file" id="fileInput" accept=".gltf, .glb">
-        
+        <h1>Visualizador BIM em AR</h1>
+        <p>Selecione um arquivo .GLTF ou .GLB para visualizar em realidade aumentada.</p>
+        <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
+        <input type="file" id="fileInput" accept=".gltf,.glb" style="display:none;">
         <div class="status-message" id="status"></div>
     </div>
 
-    <!-- A cena A-Frame para realidade aumentada sem marcador -->
     <a-scene 
         id="ar-scene" 
-        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
-        vr-mode-ui="enabled: false;"
+        vr-mode-ui="enabled: false"
         embedded
+        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
     >
-        <a-entity
-            id="model-container" 
-            scale="0.005 0.005 0.005" 
-            rotation="-90 0 0"
-        ></a-entity>
-        <a-entity camera></a-camera>
+        <!-- Container do modelo -->
+        <a-entity id="model-container"></a-entity>
+        <a-entity camera></a-entity>
     </a-scene>
-
+    
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const fileInput = document.getElementById('fileInput');
@@ -122,51 +64,59 @@
             const arScene = document.getElementById('ar-scene');
             const appContainer = document.getElementById('app-container');
             const modelContainer = document.getElementById('model-container');
-            
+            let modelLoaded = false;
+            let modelUrl = null;
+
             function showStatus(message) {
                 statusDiv.innerText = message;
             }
 
             fileInput.addEventListener('change', (event) => {
                 const file = event.target.files[0];
-                if (!file) {
-                    return;
-                }
+                if (!file) return;
 
-                showStatus('Processando arquivo... isso pode levar alguns segundos.');
-                
+                showStatus('Processando arquivo...');
                 try {
-                    const modelUrl = URL.createObjectURL(file);
-
+                    modelUrl = URL.createObjectURL(file);
+                    
+                    // limpa modelos antigos
                     while (modelContainer.firstChild) {
                         modelContainer.removeChild(modelContainer.firstChild);
                     }
 
-                    const model = document.createElement('a-gltf-model');
-                    model.setAttribute('src', modelUrl);
+                    // cria entidade do modelo
+                    const model = document.createElement('a-entity');
+                    model.setAttribute('gltf-model', modelUrl);
+                    model.setAttribute('scale', '0.05 0.05 0.05');
+                    model.setAttribute('position', '0 0 -3'); // 3m à frente da câmera
                     model.setAttribute('animation-mixer', '');
-                    model.setAttribute('position', '0 0.5 0');
-                    model.setAttribute('scale', '1 1 1');
 
                     model.addEventListener('model-loaded', () => {
-                        showStatus('Modelo carregado com sucesso! A câmara irá ligar. Aponte para um plano (chão/mesa) e toque para projetar.');
+                        modelLoaded = true;
+                        showStatus('Modelo carregado! Toque na tela para reposicionar.');
                         appContainer.style.display = 'none';
                         arScene.style.display = 'block';
                     });
 
                     model.addEventListener('model-error', (error) => {
-                        console.error('Erro ao carregar o modelo:', error);
+                        console.error('Erro ao carregar modelo:', error);
                         URL.revokeObjectURL(modelUrl);
-                        showStatus('Ocorreu um erro ao carregar o modelo. O formato do ficheiro pode não ser válido.');
+                        showStatus('Erro ao carregar o modelo.');
                         arScene.style.display = 'none';
                         appContainer.style.display = 'block';
                     });
 
                     modelContainer.appendChild(model);
-
                 } catch (error) {
-                    console.error('Erro ao processar o arquivo GLTF:', error);
-                    showStatus('Ocorreu um erro ao carregar o modelo. Por favor, tente novamente.');
+                    console.error('Erro ao processar o arquivo:', error);
+                    showStatus('Falha ao carregar o modelo.');
+                }
+            });
+
+            // reposiciona o modelo sempre que clicar
+            arScene.addEventListener('click', () => {
+                if (modelLoaded) {
+                    modelContainer.object3D.position.set(0, 0, -3); // sempre 3m à frente
                 }
             });
         });

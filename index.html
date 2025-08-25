@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador GLTF em AR</title>
+    <title>Visualizador GLTF em AR Sem Marcador</title>
     <!-- A-Frame - Framework para Web VR/AR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via CDN. -->
@@ -75,21 +75,6 @@
             color: #0891b2;
         }
 
-        #marker-info {
-            margin-top: 20px;
-            background-color: #f0f9ff;
-            border: 1px dashed #7dd3fc;
-            padding: 15px;
-            border-radius: 8px;
-            display: none;
-        }
-
-        #marker-img {
-            max-width: 150px;
-            margin-top: 15px;
-            border-radius: 8px;
-        }
-
         #ar-scene {
             display: none;
             width: 100vw;
@@ -104,7 +89,7 @@
             Selecione um arquivo .GLTF para visualizar o modelo em realidade aumentada.
         </p>
         <p>
-            Após o carregamento, você precisará apontar a câmara do seu dispositivo para o marcador abaixo.
+            Após o carregamento, a câmara irá ligar automaticamente.
         </p>
         
         <label for="fileInput" class="upload-button">
@@ -113,41 +98,31 @@
         <input type="file" id="fileInput" accept=".gltf, .glb">
         
         <div class="status-message" id="status"></div>
-
-        <div id="marker-info">
-            <p><strong>Marque essa imagem para visualizar o modelo:</strong></p>
-            <img id="marker-img" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.png" alt="NFT-based marker">
-        </div>
     </div>
 
-    <!-- A cena A-Frame para realidade aumentada -->
+    <!-- A cena A-Frame para realidade aumentada sem marcador -->
     <a-scene 
         id="ar-scene" 
         arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
+        vr-mode-ui="enabled: false;"
+        embedded
     >
-        <!-- Marcador baseado em NFT. O modelo 3D será projetado sobre esta imagem. -->
-        <a-marker-nft
-            type="nft" 
-            url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.nft"
-        >
-            <a-entity
-                id="model-container" 
-                scale="0.005 0.005 0.005" 
-                rotation="-90 0 0"
-            ></a-entity>
-        </a-marker-nft>
-        <a-entity camera></a-entity>
+        <a-entity
+            id="model-container" 
+            scale="0.005 0.005 0.005" 
+            rotation="-90 0 0"
+        ></a-entity>
+        <a-entity camera></a-camera>
     </a-scene>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const fileInput = document.getElementById('fileInput');
             const statusDiv = document.getElementById('status');
-            const markerInfo = document.getElementById('marker-info');
             const arScene = document.getElementById('ar-scene');
             const appContainer = document.getElementById('app-container');
             const modelContainer = document.getElementById('model-container');
-
+            
             function showStatus(message) {
                 statusDiv.innerText = message;
             }
@@ -159,34 +134,28 @@
                 }
 
                 showStatus('Processando arquivo... isso pode levar alguns segundos.');
-
+                
                 try {
-                    // Cria uma URL temporária para o ficheiro carregado
                     const modelUrl = URL.createObjectURL(file);
 
-                    // Remove qualquer modelo anterior
                     while (modelContainer.firstChild) {
                         modelContainer.removeChild(modelContainer.firstChild);
                     }
 
-                    // Cria o elemento A-Frame e define a origem para a URL do ficheiro
                     const model = document.createElement('a-gltf-model');
                     model.setAttribute('src', modelUrl);
                     model.setAttribute('animation-mixer', '');
-                    model.setAttribute('position', '0 0.5 0'); // Posição do modelo
+                    model.setAttribute('position', '0 0.5 0');
                     model.setAttribute('scale', '1 1 1');
 
-                    // Adiciona um listener para saber quando o modelo está carregado
                     model.addEventListener('model-loaded', () => {
-                        showStatus('Modelo carregado com sucesso! Aponte para o marcador e a projeção irá começar.');
-                        markerInfo.style.display = 'block';
+                        showStatus('Modelo carregado com sucesso! A câmara irá ligar. Aponte para um plano (chão/mesa) e toque para projetar.');
                         appContainer.style.display = 'none';
                         arScene.style.display = 'block';
                     });
 
                     model.addEventListener('model-error', (error) => {
                         console.error('Erro ao carregar o modelo:', error);
-                        // Limpa a URL temporária para evitar vazamento de memória
                         URL.revokeObjectURL(modelUrl);
                         showStatus('Ocorreu um erro ao carregar o modelo. O formato do ficheiro pode não ser válido.');
                         arScene.style.display = 'none';

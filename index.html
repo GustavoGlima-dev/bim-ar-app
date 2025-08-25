@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualizador BIM em AR</title>
+    <!-- A-Frame - Framework para Web VR/AR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <!-- AR.js - Biblioteca de realidade aumentada. Usando uma versão estável via unpkg. -->
+    <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
+    <!-- IFC.js - Biblioteca para ler e converter arquivos IFC no navegador. -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.38/web-ifc-api.js"></script>
     <style>
         body {
@@ -102,7 +105,7 @@
             Selecione um arquivo .IFC para visualizar o modelo em realidade aumentada.
         </p>
         <p>
-            Após o carregamento, você precisará apontar a câmera do seu dispositivo para o marcador abaixo.
+            Após o carregamento, você precisará apontar a câmara do seu dispositivo para o marcador abaixo.
         </p>
         
         <label for="fileInput" class="upload-button">

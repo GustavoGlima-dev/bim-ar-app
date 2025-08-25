@@ -11,8 +11,7 @@
   <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
   import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/exporters/GLTFExporter.js';
-  import { IFCLoader } from 'https://cdn.jsdelivr.net/npm/web-ifc-three@0.0.151/IFCLoader.js';
-  
+  import { IFCLoader } from 'https://cdn.jsdelivr.net/npm/web-ifc-three@1.0.0-alpha.38/IFCLoader.js';
 
   document.addEventListener("DOMContentLoaded", () => {
    const fileInput = document.getElementById("fileInput");
@@ -32,7 +31,7 @@
    // Criar e configurar o IFCLoader
    const ifcLoader = new IFCLoader();
    // IMPORTANTE: Defina o caminho para os arquivos .wasm
-   ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.46/");
+   ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@1.0.0-alpha.49/");
 
    fileInput.addEventListener("change", async (event) => {
     const file = event.target.files[0];

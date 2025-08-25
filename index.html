@@ -1,152 +1,144 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visualizador IFC em AR</title>
-  
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Visualizador IFC em AR</title>
+ 
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
-    import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/exporters/GLTFExporter.js';
-    import { IFCLoader } from 'web-ifc-three';
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
+  import { IFCLoader } from 'https://cdn.jsdelivr.net/npm/web-ifc-three@1.0.0-alpha.37/IFCLoader.js';
+  import { GLTFExporter } from 'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/exporters/GLTFExporter.js';
 
-    document.addEventListener("DOMContentLoaded", () => {
-      const fileInput = document.getElementById("fileInput");
-      const statusDiv = document.getElementById("status");
-      const markerInfo = document.getElementById("marker-info");
-      const arScene = document.getElementById("ar-scene");
-      const appContainer = document.getElementById("app-container");
-      const modelContainer = document.getElementById("model-container");
+  document.addEventListener("DOMContentLoaded", () => {
+   const fileInput = document.getElementById("fileInput");
+   const statusDiv = document.getElementById("status");
+   const markerInfo = document.getElementById("marker-info");
+   const arScene = document.getElementById("ar-scene");
+   const appContainer = document.getElementById("app-container");
+   const modelContainer = document.getElementById("model-container");
 
-      function showStatus(msg) {
-        statusDiv.innerText = msg;
-      }
+   function showStatus(msg) {
+    statusDiv.innerText = msg;
+   }
 
-      // Adicione um visualizador e uma cena Three.js para o IFCLoader
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer();
+   // Criar uma cena Three.js temporária para exportação
+   const tempScene = new THREE.Scene();
 
-      const ifcLoader = new IFCLoader();
-      ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.46/"); // Configure o caminho para o arquivo WASM
+   // Criar e configurar o IFCLoader
+   const ifcLoader = new IFCLoader();
+   // IMPORTANTE: Defina o caminho para os arquivos .wasm
+   ifcLoader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.46/");
 
-      fileInput.addEventListener("change", async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
+   fileInput.addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-        if (!file.name.toLowerCase().endsWith(".ifc")) {
-          showStatus("Por favor, selecione um arquivo .IFC");
-          return;
-        }
-
-        showStatus("Processando arquivo IFC... aguarde.");
-
-        try {
-          const fileReader = new FileReader();
-          fileReader.onload = (e) => {
-            const buffer = e.target.result;
-            const uint8Array = new Uint8Array(buffer);
-
-            // Carregue o modelo IFC
-            ifcLoader.load(uint8Array, (ifcModel) => {
-              const tempScene = new THREE.Scene();
-              tempScene.add(ifcModel);
-
-              // Exporte para glTF
-              const exporter = new GLTFExporter();
-              exporter.parse(
-                tempScene,
-                (gltf) => {
-                  let blob;
-                  if (gltf instanceof ArrayBuffer) {
-                    blob = new Blob([gltf], { type: "application/octet-stream" });
-                  } else {
-                    blob = new Blob([JSON.stringify(gltf)], { type: "application/json" });
-                  }
-
-                  const url = URL.createObjectURL(blob);
-
-                  // Limpar modelos anteriores
-                  while (modelContainer.firstChild) {
-                    modelContainer.removeChild(modelContainer.firstChild);
-                  }
-
-                  // Criar entidade A-Frame para o modelo convertido
-                  const model = document.createElement("a-gltf-model");
-                  model.setAttribute("src", url);
-                  model.setAttribute("position", "0 0.5 0");
-                  model.setAttribute("scale", "1 1 1"); // Ajuste a escala para o novo container
-
-                  modelContainer.appendChild(model);
-
-                  // Atualizar UI
-                  showStatus("Modelo convertido e carregado com sucesso! Aponte para o marcador.");
-                  markerInfo.style.display = "block";
-                  appContainer.style.display = "none";
-                  arScene.style.display = "block";
-                },
-                (error) => {
-                  console.error("Erro ao exportar para glTF:", error);
-                  showStatus("Erro ao exportar o modelo IFC para glTF.");
-                },
-                { binary: true } // true = .glb binário
-              );
-            }, (error) => {
-              console.error("Erro ao carregar o arquivo IFC:", error);
-              showStatus("Erro ao carregar o arquivo IFC. Verifique se é válido.");
-            });
-          };
-          fileReader.readAsArrayBuffer(file);
-        } catch (err) {
-          console.error(err);
-          showStatus("Erro ao processar o arquivo IFC.");
-        }
-      });
-    });
-  </script>
-
-  <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
-      background: #f8fafc;
+    if (!file.name.toLowerCase().endsWith(".ifc")) {
+     showStatus("Por favor, selecione um arquivo .IFC");
+     return;
     }
-    .container { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .upload-button { background: #2563eb; color: #fff; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    .status-message { margin-top: 20px; color: #0891b2; font-weight: bold; }
-    #ar-scene { display: none; width: 100vw; height: 100vh; }
-  </style>
+
+    showStatus("Processando arquivo IFC... aguarde.");
+
+    try {
+     const fileReader = new FileReader();
+     fileReader.onload = (e) => {
+      // Obter os dados brutos do arquivo como Uint8Array
+      const uint8Array = new Uint8Array(e.target.result);
+
+      // Carregar o modelo IFC a partir dos dados binários
+      ifcLoader.load(uint8Array, (ifcModel) => {
+       tempScene.add(ifcModel);
+
+       // Exportar para glTF
+       const exporter = new GLTFExporter();
+       exporter.parse(
+        tempScene,
+        (gltf) => {
+         let blob;
+         if (gltf instanceof ArrayBuffer) {
+          blob = new Blob([gltf], { type: "application/octet-stream" });
+         } else {
+          blob = new Blob([JSON.stringify(gltf)], { type: "application/json" });
+         }
+
+         const url = URL.createObjectURL(blob);
+
+         // Limpar modelos anteriores
+         while (modelContainer.firstChild) {
+          modelContainer.removeChild(modelContainer.firstChild);
+         }
+
+         // Criar entidade A-Frame para o modelo convertido
+         const model = document.createElement("a-gltf-model");
+         model.setAttribute("src", url);
+         model.setAttribute("position", "0 0.5 0");
+         model.setAttribute("scale", "1 1 1");
+
+         modelContainer.appendChild(model);
+
+         // Atualizar UI
+         showStatus("Modelo convertido e carregado com sucesso! Aponte para o marcador.");
+         markerInfo.style.display = "block";
+         appContainer.style.display = "none";
+         arScene.style.display = "block";
+        },
+        { binary: true } // true = .glb binário
+       );
+      });
+     };
+     fileReader.readAsArrayBuffer(file);
+    } catch (err) {
+     console.error(err);
+     showStatus("Erro ao processar o arquivo IFC.");
+    }
+   });
+  });
+ </script>
+
+ <style>
+  body {
+   font-family: sans-serif;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   min-height: 100vh;
+   margin: 0;
+   padding: 20px;
+   text-align: center;
+   background: #f8fafc;
+  }
+  .container { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+  .upload-button { background: #2563eb; color: #fff; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+  .status-message { margin-top: 20px; color: #0891b2; font-weight: bold; }
+  #ar-scene { display: none; width: 100vw; height: 100vh; }
+ </style>
 </head>
 <body>
-  <div class="container" id="app-container">
-    <h1>Visualizador IFC → glTF em AR</h1>
-    <p>Selecione um arquivo <strong>.IFC</strong> para converter e visualizar em realidade aumentada.</p>
+ <div class="container" id="app-container">
+  <h1>Visualizador IFC → glTF em AR</h1>
+  <p>Selecione um arquivo <strong>.IFC</strong> para converter e visualizar em realidade aumentada.</p>
 
-    <label for="fileInput" class="upload-button">Selecionar Arquivo .IFC</label>
-    <input type="file" id="fileInput" accept=".ifc" style="display:none">
+  <label for="fileInput" class="upload-button">Selecionar Arquivo .IFC</label>
+  <input type="file" id="fileInput" accept=".ifc" style="display:none">
 
-    <div class="status-message" id="status"></div>
-    <div id="marker-info" style="display:none">
-      <p><strong>Use este marcador para visualizar:</strong></p>
-      <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/pattern-files/hiro.png" width="150">
-    </div>
+  <div class="status-message" id="status"></div>
+  <div id="marker-info" style="display:none">
+   <p><strong>Use este marcador para visualizar:</strong></p>
+   <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/pattern-files/hiro.png" width="150">
   </div>
+ </div>
 
   <a-scene id="ar-scene" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-    <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/pattern-files/hiro.patt">
-      <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="0.1 0.1 0.1"></a-entity>
-    </a-marker>
-    <a-entity camera></a-entity>
-  </a-scene>
+  <a-marker type="pattern" url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/pattern-files/hiro.patt">
+   <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="0.1 0.1 0.1"></a-entity>
+  </a-marker>
+  <a-entity camera></a-entity>
+ </a-scene>
 </body>
 </html>

@@ -1,64 +1,204 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>Scanner QR → IFC</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
-  <style>
-    body { margin:0; font-family:sans-serif; background:#f0f4f8; text-align:center; }
-    video, canvas { width:100%; max-width:420px; }
-    #output { margin-top:10px; font-weight:bold; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador BIM em AR</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/web-ifc@0.0.38/web-ifc-api.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #1e293b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #0c4a6e;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-button {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .upload-button:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .status-message {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #0891b2;
+        }
+
+        #marker-info {
+            margin-top: 20px;
+            background-color: #f0f9ff;
+            border: 1px dashed #7dd3fc;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        #marker-img {
+            max-width: 150px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+
+        #ar-scene {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
 </head>
 <body>
-  <h3>Aponte para o QR Code do arquivo IFC</h3>
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas" hidden></canvas>
-  <div id="output">Status: iniciando câmera…</div>
+    <div class="container" id="app-container">
+        <h1>Visualizador BIM em Realidade Aumentada</h1>
+        <p>
+            Selecione um arquivo .IFC para visualizar o modelo em realidade aumentada.
+        </p>
+        <p>
+            Após o carregamento, você precisará apontar a câmera do seu dispositivo para o marcador abaixo.
+        </p>
+        
+        <label for="fileInput" class="upload-button">
+            Selecionar Arquivo .IFC
+        </label>
+        <input type="file" id="fileInput" accept=".IFC">
+        
+        <div class="status-message" id="status"></div>
 
-  <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const output = document.getElementById("output");
+        <div id="marker-info">
+            <p><strong>Marque essa imagem para visualizar o modelo:</strong></p>
+            <img id="marker-img" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.png" alt="Marcador AR.js">
+        </div>
+    </div>
 
-    function normalizeDriveLink(url) {
-      if (url.includes("drive.google.com/file/d/")) {
-        const m = url.match(/\/d\/([^/]+)\//);
-        if (m && m[1]) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
-      }
-      return url;
-    }
+    <!-- A cena A-Frame para realidade aumentada -->
+    <a-scene 
+        id="ar-scene" 
+        vr-mode-ui="enabled: false" 
+        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
+    >
+        <a-marker
+            type="pattern" 
+            url="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex-image/trex-image.patt"
+        >
+            <a-entity
+                id="model-container" 
+                scale="0.005 0.005 0.005" 
+                rotation="-90 0 0"
+            ></a-entity>
+        </a-marker>
+        <a-entity camera></a-entity>
+    </a-scene>
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      .then(stream => {
-        video.srcObject = stream;
-        requestAnimationFrame(tick);
-      })
-      .catch(err => {
-        output.textContent = "Erro câmera: " + err;
-      });
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileInput = document.getElementById('fileInput');
+            const statusDiv = document.getElementById('status');
+            const markerInfo = document.getElementById('marker-info');
+            const arScene = document.getElementById('ar-scene');
+            const appContainer = document.getElementById('app-container');
+            const modelContainer = document.getElementById('model-container');
 
-    function tick() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(img.data, canvas.width, canvas.height);
-        if (code) {
-          const url = normalizeDriveLink(code.data);
-          output.textContent = "QR detectado, redirecionando…";
-          // para câmera
-          video.srcObject.getTracks().forEach(t => t.stop());
-          // redireciona para viewer.html passando a URL
-          window.location.href = "viewer.html?url=" + encodeURIComponent(url);
-          return;
-        }
-      }
-      requestAnimationFrame(tick);
-    }
-  </script>
+            // IFC.js é uma biblioteca baseada em módulos JavaScript, ideal para projetos
+            // que usam bundlers como Webpack. Para a demonstração via CDN,
+            // é necessário usar 'type="module"' no script.
+            // Para um projeto real, você importaria 'web-ifc' e 'web-ifc-three' via NPM.
+            // Esta simulação carrega um modelo glTF pré-selecionado para demonstrar o conceito.
+            const IFC_ASSET_URL = "https://cdn.aframe.io/test-models/models/glTF-2.0/virtualcity/VC.gltf";
+            
+            function showStatus(message) {
+                statusDiv.innerText = message;
+            }
+
+            fileInput.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                if (!file.name.endsWith('.IFC')) {
+                    showStatus('Por favor, selecione um arquivo com a extensão .ifc');
+                    return;
+                }
+
+                showStatus('Processando arquivo... isso pode levar alguns segundos.');
+
+                try {
+                    // A implementação real da conversão IFC para 3D (IFC.js)
+                    // envolveria o processamento do arquivo binário e a criação de uma cena Three.js.
+                    // Neste exemplo simulado, demonstramos o fluxo carregando um modelo glTF.
+                    // Para o seu uso, você substituiria esta parte pela lógica do IFC.js.
+
+                    // Exemplo de como um modelo glTF é carregado com A-Frame
+                    const model = document.createElement('a-gltf-model');
+                    model.setAttribute('src', IFC_ASSET_URL);
+                    model.setAttribute('animation-mixer', '');
+                    model.setAttribute('position', '0 0.5 0'); // Posição do modelo
+                    model.setAttribute('scale', '1 1 1');
+
+                    modelContainer.appendChild(model);
+
+                    showStatus('Modelo carregado com sucesso! Aponte para o marcador.');
+                    markerInfo.style.display = 'block';
+                    arScene.style.display = 'block';
+                    appContainer.style.display = 'none';
+
+                } catch (error) {
+                    console.error('Erro ao processar o arquivo IFC:', error);
+                    showStatus('Ocorreu um erro ao carregar o modelo. Por favor, tente novamente.');
+                    // Esconde a cena AR em caso de erro
+                    arScene.style.display = 'none';
+                    appContainer.style.display = 'block';
+                }
+            });
+        });
+    </script>
 </body>
 </html>

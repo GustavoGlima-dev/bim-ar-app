@@ -3,30 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visualizador GLTF em AR</title>
+  <title>Visualizador GLTF em AR (Sem Marcador)</title>
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- AR.js -->
   <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #000;
-    }
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
     .container {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
+      top: 0; left: 0; right: 0;
       z-index: 9999;
       background: rgba(255, 255, 255, 0.95);
       padding: 20px;
       text-align: center;
     }
-    h1 { margin: 0 0 10px; font-size: 1.5rem; }
-    .upload-button, .start-ar-button {
+    .upload-button {
       background-color: #2563eb;
       color: white;
       padding: 12px 24px;
@@ -35,31 +27,27 @@
       cursor: pointer;
       font-size: 1rem;
       font-weight: 600;
-      margin: 10px 0;
     }
     .status-message { margin-top: 10px; font-size: 1rem; color: #0891b2; }
   </style>
 </head>
 <body>
   <div class="container" id="app-container">
-    <h1>Visualizador BIM em AR</h1>
-    <p>Selecione um arquivo .GLTF ou .GLB para visualizar em AR.</p>
+    <h1>Visualizador GLTF/GLB em AR</h1>
+    <p>Selecione um arquivo .GLTF ou .GLB. O modelo será exibido a <b>3m à frente da câmera</b>.</p>
     <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
     <input type="file" id="fileInput" accept=".gltf,.glb" style="display:none">
     <div class="status-message" id="status"></div>
-    <div id="ar-buttons" style="display:none;">
-      <button id="startArButton" class="start-ar-button">Iniciar Projeção AR</button>
-    </div>
   </div>
 
-  <!-- Cena A-Frame SEM display:none -->
   <a-scene
     embedded
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; trackingMethod: tflite; debugUIEnabled: false;"
+    arjs="sourceType: webcam; debugUIEnabled: false;"
   >
-    <!-- Modelo começa invisível -->
-    <a-entity id="model-container" visible="false"></a-entity>
+    <!-- Modelo sem marcador -->
+    <a-entity id="model-container" scale="0.05 0.05 0.05" position="0 0 -3"></a-entity>
+
     <a-entity camera></a-entity>
   </a-scene>
 
@@ -67,10 +55,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       const fileInput = document.getElementById('fileInput');
       const statusDiv = document.getElementById('status');
-      const arButtons = document.getElementById('ar-buttons');
-      const appContainer = document.getElementById('app-container');
       const modelContainer = document.getElementById('model-container');
-      const startArButton = document.getElementById('startArButton');
 
       function showStatus(msg) { statusDiv.innerText = msg; }
 
@@ -78,43 +63,35 @@
         const file = e.target.files[0];
         if (!file) return;
         showStatus("Carregando modelo...");
+
         try {
           const modelUrl = URL.createObjectURL(file);
 
-          while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
+          // Remove modelo anterior
+          while (modelContainer.firstChild) {
+            modelContainer.removeChild(modelContainer.firstChild);
+          }
 
           const model = document.createElement('a-entity');
           model.setAttribute('gltf-model', modelUrl);
           model.setAttribute('scale', '0.05 0.05 0.05');
-          model.setAttribute('position', '0 0 -3');
+          model.setAttribute('position', '0 0 0');
           model.setAttribute('animation-mixer', '');
 
           model.addEventListener('model-loaded', () => {
-            showStatus("Modelo pronto! Clique em 'Iniciar Projeção AR'.");
-            arButtons.style.display = 'block';
+            showStatus("Modelo carregado! Veja à frente da câmera.");
           });
 
-          model.addEventListener('error', (e) => {
-            console.error("Erro modelo:", e);
-            showStatus("Erro ao carregar o modelo.");
+          model.addEventListener('error', (err) => {
+            console.error("Erro ao carregar modelo:", err);
+            showStatus("Erro: o arquivo não pôde ser carregado.");
           });
 
           modelContainer.appendChild(model);
 
         } catch (err) {
           console.error(err);
-          showStatus("Falha ao processar modelo.");
-        }
-      });
-
-      startArButton.addEventListener('click', async () => {
-        try {
-          await navigator.mediaDevices.getUserMedia({ video: true });
-          appContainer.style.display = 'none';
-          modelContainer.setAttribute('visible', 'true');
-        } catch (err) {
-          console.error("Erro câmera:", err);
-          showStatus("Não foi possível acessar a câmera.");
+          showStatus("Falha ao processar o arquivo.");
         }
       });
     });

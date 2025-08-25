@@ -1,18 +1,20 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <title>Visualizador GLTF/GLB com WebXR</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualizador GLTF/GLB com GPS AR</title>
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- AR.js com GPS -->
+  <script src="https://unpkg.com/@ar-js-org/aframe-ar@2.1.0/aframe-ar.js"></script>
   <style>
-    body { margin:0; overflow:hidden; font-family:sans-serif; }
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
     .container {
-      position: absolute;
-      top: 0; left: 0; right: 0;
+      position: absolute; top: 0; left: 0; right: 0;
       z-index: 9999;
       background: rgba(255, 255, 255, 0.95);
-      padding: 20px;
-      text-align: center;
+      padding: 20px; text-align: center;
     }
     .upload-button {
       background-color: #2563eb;
@@ -29,42 +31,35 @@
 </head>
 <body>
   <div class="container" id="ui">
-    <h1>Visualizador GLTF/GLB em AR</h1>
-    <p>Selecione um arquivo .GLTF ou .GLB e depois toque no chão/mesa para posicionar.</p>
+    <h1>Visualizador GLTF/GLB com GPS</h1>
+    <p>Selecione um arquivo e o modelo aparecerá na coordenada definida.</p>
     <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
     <input type="file" id="fileInput" accept=".gltf,.glb" style="display:none">
     <div class="status-message" id="status"></div>
   </div>
 
   <a-scene
-    webxr="optionalFeatures: hit-test;"
-    xrweb="optionalFeatures: hit-test;"
     vr-mode-ui="enabled: false"
     embedded
-    renderer="logarithmicDepthBuffer: true;"
+    arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
   >
-    <!-- Luzes -->
-    <a-entity light="type: hemisphere; intensity: 1"></a-entity>
-    <a-entity light="type: directional; intensity: 0.6" position="1 3 2"></a-entity>
+    <!-- Container do modelo em coordenada GPS -->
+    <a-entity
+      id="model-container"
+      gps-entity-place="latitude: -23.55052; longitude: -46.633308;" <!-- Ajuste para a coordenada desejada -->
+      scale="5 5 5"
+    ></a-entity>
 
-    <!-- Container do modelo (invisível até upload + toque) -->
-    <a-entity id="model" visible="false"></a-entity>
-
-    <!-- Câmera -->
-    <a-camera position="0 1.6 0"></a-camera>
+    <!-- Câmera com GPS -->
+    <a-camera gps-camera rotation-reader></a-camera>
   </a-scene>
 
   <script>
     const fileInput = document.getElementById("fileInput");
     const statusDiv = document.getElementById("status");
-    const model = document.getElementById("model");
-    const scene = document.querySelector("a-scene");
+    const modelContainer = document.getElementById("model-container");
 
-    let modelUrl = null; // guarda o URL do arquivo carregado
-
-    function showStatus(msg) {
-      statusDiv.innerText = msg;
-    }
+    function showStatus(msg) { statusDiv.innerText = msg; }
 
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
@@ -72,43 +67,30 @@
       showStatus("Carregando modelo...");
 
       try {
-        if (modelUrl) URL.revokeObjectURL(modelUrl); // libera URL antiga
-        modelUrl = URL.createObjectURL(file);
+        const modelUrl = URL.createObjectURL(file);
 
-        // limpa atributos antigos
-        model.removeAttribute("gltf-model");
+        // Remove modelos anteriores
+        while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
 
-        // aplica o novo modelo
+        const model = document.createElement("a-entity");
         model.setAttribute("gltf-model", modelUrl);
         model.setAttribute("scale", "0.05 0.05 0.05");
-        model.setAttribute("visible", "false");
+        model.setAttribute("animation-mixer", "");
 
         model.addEventListener("model-loaded", () => {
-          showStatus("Modelo carregado! Toque em uma superfície para posicionar.");
+          showStatus("Modelo carregado! Caminhe até as coordenadas para vê-lo.");
         });
 
         model.addEventListener("error", (err) => {
-          console.error("Erro no modelo:", err);
+          console.error("Erro ao carregar modelo:", err);
           showStatus("Erro: não foi possível carregar este arquivo.");
         });
+
+        modelContainer.appendChild(model);
 
       } catch (err) {
         console.error(err);
         showStatus("Falha ao processar o arquivo.");
-      }
-    });
-
-    // posiciona o modelo no ponto tocado
-    scene.addEventListener("click", (ev) => {
-      if (!modelUrl) {
-        showStatus("Selecione um arquivo primeiro.");
-        return;
-      }
-      if (ev.detail.intersection) {
-        const { x, y, z } = ev.detail.intersection.point;
-        model.setAttribute("position", `${x} ${y} ${z}`);
-        model.setAttribute("visible", "true");
-        showStatus("Modelo posicionado.");
       }
     });
   </script>

@@ -9,7 +9,7 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- AR.js para AR sem marcador -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <!-- Gestos -->
+  <!-- Gestos mobile -->
   <script src="https://unpkg.com/aframe-gesture-detector/dist/aframe-gesture-detector.min.js"></script>
   <script src="https://unpkg.com/aframe-gesture-handler/dist/aframe-gesture-handler.min.js"></script>
 
@@ -63,18 +63,18 @@
     <a-entity camera></a-entity>
   </a-scene>
   
-  <!-- Componente customizado para mover com arraste -->
+  <!-- Componente customizado para mover com dois dedos no mobile -->
   <script>
   AFRAME.registerComponent('drag-move', {
     schema: { factor: {type: 'number', default: 0.002} },
     init: function () {
       this.isDragging = false;
 
-      this.el.sceneEl.addEventListener('onefingerstart', (e) => {
+      this.el.sceneEl.addEventListener('twofingerstart', () => {
         this.isDragging = true;
       });
 
-      this.el.sceneEl.addEventListener('onefingermove', (e) => {
+      this.el.sceneEl.addEventListener('twofingermove', (e) => {
         if (!this.isDragging) return;
         const dx = e.detail.positionChange.x;
         const dy = e.detail.positionChange.y;
@@ -84,11 +84,56 @@
         pos.y -= dy * this.data.factor; // invertido para parecer natural
       });
 
-      this.el.sceneEl.addEventListener('onefingerend', () => {
+      this.el.sceneEl.addEventListener('twofingerend', () => {
         this.isDragging = false;
       });
     }
   });
+  </script>
+
+  <!-- Script para fallback no desktop (mouse) -->
+  <script>
+  function enableMouseControls(model) {
+    let isMouseDown = false;
+    let lastX = 0, lastY = 0;
+
+    window.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    window.addEventListener('mouseup', () => {
+      isMouseDown = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isMouseDown || !model) return;
+
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      if (e.shiftKey) {
+        // mover modelo
+        model.object3D.position.x += dx * 0.01;
+        model.object3D.position.y -= dy * 0.01;
+      } else {
+        // rotacionar modelo
+        model.object3D.rotation.y += dx * 0.01;
+        model.object3D.rotation.x += dy * 0.01;
+      }
+    });
+
+    // zoom com scroll
+    window.addEventListener('wheel', (e) => {
+      if (!model) return;
+      const scale = model.object3D.scale;
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      scale.multiplyScalar(factor);
+    });
+  }
   </script>
 
   <script>
@@ -98,7 +143,6 @@
       const arScene = document.getElementById('ar-scene');
       const appContainer = document.getElementById('app-container');
       const modelContainer = document.getElementById('model-container');
-      let modelLoaded = false;
       let modelUrl = null;
 
       function showStatus(message) {
@@ -128,10 +172,12 @@
           model.setAttribute('drag-move', 'factor: 0.003');
 
           model.addEventListener('model-loaded', () => {
-            modelLoaded = true;
-            showStatus('Modelo carregado! Use os gestos para interagir.');
+            showStatus('Modelo carregado! Use gestos no celular ou mouse no desktop.');
             appContainer.style.display = 'none';
             arScene.style.display = 'block';
+
+            // ativa controles de mouse no desktop
+            enableMouseControls(model);
           });
 
           model.addEventListener('model-error', (error) => {

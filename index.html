@@ -9,7 +9,7 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <!-- AR.js para AR sem marcador -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <!-- Gestos mobile -->
+  <!-- Gestos mobile (Android) -->
   <script src="https://unpkg.com/aframe-gesture-detector/dist/aframe-gesture-detector.min.js"></script>
   <script src="https://unpkg.com/aframe-gesture-handler/dist/aframe-gesture-handler.min.js"></script>
 
@@ -58,52 +58,93 @@
     arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
     gesture-detector
   >
-    <!-- Container do modelo -->
     <a-entity id="model-container"></a-entity>
     <a-entity camera></a-entity>
   </a-scene>
   
-  <!-- Componente customizado para mover com dois dedos (fix iOS Safari) -->
+  <!-- Componente Android: mover com dois dedos -->
   <script>
   AFRAME.registerComponent('drag-move', {
     schema: { factor: {type: 'number', default: 0.002} },
     init: function () {
       const sceneEl = this.el.sceneEl;
-      let prevTouches = [];
+      let isDragging = false;
 
-      sceneEl.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-          prevTouches = [...e.touches];
-          e.preventDefault();
-        }
-      }, {passive: false});
-
-      sceneEl.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && prevTouches.length === 2) {
-          const dx = ((e.touches[0].clientX - prevTouches[0].clientX) +
-                      (e.touches[1].clientX - prevTouches[1].clientX)) / 2;
-          const dy = ((e.touches[0].clientY - prevTouches[0].clientY) +
-                      (e.touches[1].clientY - prevTouches[1].clientY)) / 2;
-
-          const pos = this.el.object3D.position;
-          pos.x += dx * this.data.factor;
-          pos.y -= dy * this.data.factor;
-
-          prevTouches = [...e.touches];
-          e.preventDefault();
-        }
-      }, {passive: false});
-
-      sceneEl.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) {
-          prevTouches = [];
-        }
-      }, {passive: false});
+      sceneEl.addEventListener('twofingerstart', () => { isDragging = true; });
+      sceneEl.addEventListener('twofingermove', (e) => {
+        if (!isDragging) return;
+        const dx = (e.detail.positionChange.x);
+        const dy = (e.detail.positionChange.y);
+        const pos = this.el.object3D.position;
+        pos.x += dx * this.data.factor;
+        pos.y -= dy * this.data.factor;
+      });
+      sceneEl.addEventListener('twofingerend', () => { isDragging = false; });
     }
   });
   </script>
 
-  <!-- Script para fallback no desktop (mouse) -->
+  <!-- Componente iOS: gestos manuais -->
+  <script>
+  AFRAME.registerComponent('ios-gestures', {
+    schema: { factor: {type: 'number', default: 0.002}, zoomFactor: {type: 'number', default: 0.005} },
+    init: function () {
+      const sceneEl = this.el.sceneEl;
+      let prevTouches = [];
+
+      const getDistance = (t1, t2) => {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+      };
+
+      sceneEl.addEventListener('touchstart', (e) => {
+        prevTouches = [...e.touches];
+      }, {passive: false});
+
+      sceneEl.addEventListener('touchmove', (e) => {
+        if (!prevTouches.length) {
+          prevTouches = [...e.touches];
+          return;
+        }
+
+        if (e.touches.length === 1 && prevTouches.length === 1) {
+          // Rotação com 1 dedo
+          const dx = e.touches[0].clientX - prevTouches[0].clientX;
+          const dy = e.touches[0].clientY - prevTouches[0].clientY;
+          this.el.object3D.rotation.y += dx * 0.01;
+          this.el.object3D.rotation.x += dy * 0.01;
+        }
+
+        if (e.touches.length === 2 && prevTouches.length === 2) {
+          // Zoom por pinça
+          const prevDist = getDistance(prevTouches[0], prevTouches[1]);
+          const newDist = getDistance(e.touches[0], e.touches[1]);
+          const scale = this.el.object3D.scale;
+          const factor = 1 + (newDist - prevDist) * this.data.zoomFactor;
+          scale.multiplyScalar(factor);
+
+          // Arrasto médio para mover
+          const dx = ((e.touches[0].clientX - prevTouches[0].clientX) +
+                     (e.touches[1].clientX - prevTouches[1].clientX)) / 2;
+          const dy = ((e.touches[0].clientY - prevTouches[0].clientY) +
+                     (e.touches[1].clientY - prevTouches[1].clientY)) / 2;
+          this.el.object3D.position.x += dx * this.data.factor;
+          this.el.object3D.position.y -= dy * this.data.factor;
+        }
+
+        prevTouches = [...e.touches];
+        e.preventDefault();
+      }, {passive: false});
+
+      sceneEl.addEventListener('touchend', (e) => {
+        prevTouches = [...e.touches];
+      });
+    }
+  });
+  </script>
+
+  <!-- Fallback desktop (mouse) -->
   <script>
   function enableMouseControls(model) {
     let isMouseDown = false;
@@ -115,30 +156,24 @@
       lastY = e.clientY;
     });
 
-    window.addEventListener('mouseup', () => {
-      isMouseDown = false;
-    });
+    window.addEventListener('mouseup', () => { isMouseDown = false; });
 
     window.addEventListener('mousemove', (e) => {
       if (!isMouseDown || !model) return;
-
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX;
       lastY = e.clientY;
 
       if (e.shiftKey) {
-        // mover modelo
         model.object3D.position.x += dx * 0.01;
         model.object3D.position.y -= dy * 0.01;
       } else {
-        // rotacionar modelo
         model.object3D.rotation.y += dx * 0.01;
         model.object3D.rotation.x += dy * 0.01;
       }
     });
 
-    // zoom com scroll
     window.addEventListener('wheel', (e) => {
       if (!model) return;
       const scale = model.object3D.scale;
@@ -157,9 +192,7 @@
       const modelContainer = document.getElementById('model-container');
       let modelUrl = null;
 
-      function showStatus(message) {
-        statusDiv.innerText = message;
-      }
+      function showStatus(message) { statusDiv.innerText = message; }
 
       fileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
@@ -168,28 +201,27 @@
         showStatus('Processando arquivo...');
         try {
           modelUrl = URL.createObjectURL(file);
-          
-          // limpa modelos antigos
-          while (modelContainer.firstChild) {
-            modelContainer.removeChild(modelContainer.firstChild);
-          }
+          while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
 
-          // cria entidade do modelo
           const model = document.createElement('a-entity');
           model.setAttribute('gltf-model', modelUrl);
           model.setAttribute('scale', '0.05 0.05 0.05');
-          model.setAttribute('position', '0 0 -3'); // 3m à frente da câmera
+          model.setAttribute('position', '0 0 -3');
           model.setAttribute('animation-mixer', '');
-          model.setAttribute('gesture-handler', 'minScale: 0.01; maxScale: 2');
-          model.setAttribute('drag-move', 'factor: 0.003');
+
+          // detectar plataforma
+          if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            model.setAttribute('ios-gestures', 'factor: 0.003; zoomFactor: 0.005');
+          } else {
+            model.setAttribute('gesture-handler', 'minScale: 0.01; maxScale: 2');
+            model.setAttribute('drag-move', 'factor: 0.003');
+          }
 
           model.addEventListener('model-loaded', () => {
-            showStatus('Modelo carregado! Use gestos no celular ou mouse no desktop.');
+            showStatus('Modelo carregado! Interaja com mouse ou gestos.');
             appContainer.style.display = 'none';
             arScene.style.display = 'block';
-
-            // ativa controles de mouse no desktop
-            enableMouseControls(model);
+            enableMouseControls(model); // desktop
           });
 
           model.addEventListener('model-error', (error) => {

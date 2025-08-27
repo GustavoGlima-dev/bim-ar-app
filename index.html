@@ -1,72 +1,52 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Fallback Fake AR</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fallback Fake AR Simples</title>
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <style>
-    body { margin:0; font-family: Inter, system-ui, Arial; }
-    #ui {
-      position: fixed; inset: 0 0 auto 0;
-      background: rgba(255,255,255,.95); padding: 14px; z-index: 9999;
-      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    }
-    .btn {
-      background:#2563eb; color:#fff; border:0; border-radius:8px;
-      padding:10px 14px; font-weight:600; cursor:pointer;
-    }
-    .hint { color:#0b7285; font-size:.95rem }
-    input[type=file]{ display:none; }
+    body { margin:0; overflow:hidden }
     video#bgVideo {
-      position: fixed; top:0; left:0; width:100%; height:100%;
-      object-fit: cover; z-index:-1;
+      position: fixed;
+      top:0; left:0;
+      width:100%; height:100%;
+      object-fit: cover;
+      z-index:-1;
     }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <label class="btn" for="fileInput">Selecionar .glb/.gltf</label>
-    <input id="fileInput" type="file" accept=".glb,.gltf" />
-    <span id="status" class="hint">Carregue um modelo para começar.</span>
-  </div>
-
-  <!-- vídeo da câmera como fundo -->
+  <!-- vídeo da câmera -->
   <video id="bgVideo" autoplay playsinline muted></video>
 
-  <!-- cena A-Frame normal -->
+  <!-- cena A-Frame -->
   <a-scene embedded vr-mode-ui="enabled:false">
-    <a-entity id="fakeModel" visible="false"></a-entity>
+    <a-entity id="model" visible="false"></a-entity>
     <a-entity camera></a-entity>
   </a-scene>
 
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const fakeModel = document.getElementById('fakeModel');
-    const statusEl  = document.getElementById('status');
-    const bgVideo   = document.getElementById('bgVideo');
+  <input id="fileInput" type="file" accept=".glb,.gltf">
 
-    // pede a câmera e mostra no <video>
+  <script>
+    // abre a câmera como fundo
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
-        bgVideo.srcObject = stream;
+        document.getElementById('bgVideo').srcObject = stream;
       })
-      .catch(err => {
-        statusEl.textContent = "Erro ao acessar câmera: " + err.message;
-      });
+      .catch(err => alert("Erro câmera: " + err.message));
 
-    // upload do modelo
-    fileInput.addEventListener('change', e => {
+    // quando o usuário escolhe um modelo
+    document.getElementById('fileInput').addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
 
-      fakeModel.setAttribute('gltf-model', url);
-      fakeModel.setAttribute('scale', '0.05 0.05 0.05');
-      fakeModel.setAttribute('position', '0 0 -2'); //2 metros
-      fakeModel.setAttribute('visible', 'true');
-
-      statusEl.textContent = "Modelo carregado (fake AR, sempre 3m à frente).";
+      const model = document.getElementById('model');
+      model.setAttribute('gltf-model', url);
+      model.setAttribute('scale', '0.05 0.05 0.05');
+      model.setAttribute('position', '0 0 -3'); // 3m à frente da câmera
+      model.setAttribute('visible', 'true');
     });
   </script>
 </body>

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Tap-to-Place (WebXR c/ fallback AR.js)</title>
+  <title>AR GPS + WebXR</title>
 
-  <!-- A-Frame (>=1.5 traz o componente ar-hit-test) -->
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
 
-  <!-- AR.js (fallback iOS com marcador) -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <!-- AR.js com GPS -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
 
   <style>
     body { margin:0; font-family: Inter, system-ui, Arial; }
@@ -25,7 +25,6 @@
     .hint { color:#0b7285; font-size:.95rem }
     .small { font-size:.85rem; color:#555 }
     input[type=file]{ display:none; }
-    .link { color:#2563eb; text-decoration: underline; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -35,8 +34,7 @@
     <button id="resetBtn" class="btn" disabled>Resetar</button>
     <span id="status" class="hint">Carregue um modelo para começar.</span>
     <span id="iosNote" class="small" style="display:none">
-      iOS: este modo usa <b>marcador HIRO</b> (imprima ou mostre em outra tela). Você poderá andar ao redor do marcador.
-      <span class="link" onclick="window.open('https://raw.githack.com/AR-js-org/AR.js/master/three.js/data/patt.hiro','_blank')">Baixar HIRO</span>
+      iOS: este modo usa <b>GPS AR</b>. O modelo será colocado ~3 metros à frente de você.
     </span>
   </div>
 
@@ -45,17 +43,16 @@
     id="webxrScene"
     embedded
     renderer="colorManagement:true;physicallyCorrectLights:true"
-    xr-mode-ui="enabled:true"                         <!-- mostra o botão "Enter AR" -->
+    xr-mode-ui="enabled:true"
     webxr="optionalFeatures: hit-test,anchors,dom-overlay; overlayElement:#ui; requiredFeatures: local-floor"
-    ar-hit-test="target: #webxrModel"                <!-- retículo + colocar alvo -->
+    ar-hit-test="target: #webxrModel"
     style="display:none"
   >
-    <!-- Luz básica -->
     <a-entity light="type:hemisphere; intensity: 1"></a-entity>
     <a-entity id="webxrModel" visible="false"></a-entity>
   </a-scene>
 
-  <!-- ======== CENA AR.js (Fallback iOS com marcador) ======== -->
+  <!-- ======== CENA AR.js (Fallback iOS com GPS) ======== -->
   <a-scene
     id="arjsScene"
     embedded
@@ -63,11 +60,10 @@
     arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled:false"
     style="display:none"
   >
-    <!-- Marcador HIRO padrão -->
-    <a-marker type="pattern" url="https://raw.githack.com/AR-js-org/AR.js/master/three.js/data/patt.hiro">
-      <a-entity id="arjsModel" position="0 0 0"></a-entity>
-    </a-marker>
-    <a-entity camera></a-entity>
+    <a-entity id="arjsModel" scale="0.05 0.05 0.05"></a-entity>
+
+    <!-- câmera com GPS -->
+    <a-entity camera gps-camera rotation-reader></a-entity>
   </a-scene>
 
   <script>
@@ -82,7 +78,7 @@
     const arjsModel  = $('#arjsModel');
     let modelUrl = null;
 
-    // --- detecção de suporte WebXR "immersive-ar" ---
+    // --- detecção WebXR ---
     async function detectAndInit() {
       const supportsXR = !!(navigator.xr && navigator.xr.isSessionSupported);
       let arSupported = false;
@@ -91,65 +87,90 @@
       } catch(e) { arSupported = false; }
 
       if (arSupported) {
-        // Android/Chrome (ou navegadores com AR WebXR)
         webxrScene.style.display = '';
         arjsScene.style.display  = 'none';
-        statusEl.textContent = 'Carregue um modelo e toque "Enter AR". Mova a câmera até ver o retículo; toque para ancorar.';
+        statusEl.textContent = 'Carregue um modelo e toque "Enter AR".';
       } else {
-        // iOS Safari fallback (AR.js + marcador)
         webxrScene.style.display = 'none';
         arjsScene.style.display  = '';
         iosNote.style.display    = '';
-        statusEl.textContent = 'Carregue um modelo. Aponte para um marcador HIRO para ancorar e caminhar ao redor.';
+        statusEl.textContent = 'Carregue um modelo. Ele aparecerá ~3 metros à frente de você.';
       }
       resetBtn.disabled = true;
     }
-
     detectAndInit();
 
-    // --- upload do modelo para a(s) cena(s) ativas ---
+    // --- helper para deslocar em metros ---
+    function offsetLatLon(lat, lon, dx, dy) {
+      // dx = metros para leste (+) / oeste (-)
+      // dy = metros para norte (+) / sul (-)
+      const latOffset = dy / 111111;
+      const lonOffset = dx / (111111 * Math.cos(lat * Math.PI / 180));
+      return {
+        lat: lat + latOffset,
+        lon: lon + lonOffset
+      };
+    }
+
+    // --- upload do modelo ---
     fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
       modelUrl = URL.createObjectURL(file);
 
-      // Limpa modelos antigos
+      // limpa
       while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
       while (arjsModel.firstChild)  arjsModel.removeChild(arjsModel.firstChild);
 
-      // Configura nos dois (apenas a cena visível usa de fato)
+      // WebXR
       webxrModel.setAttribute('gltf-model', modelUrl);
       webxrModel.setAttribute('scale', '0.05 0.05 0.05');
-      webxrModel.setAttribute('visible', 'false'); // só aparece após "select" do hit-test
+      webxrModel.setAttribute('visible', 'false');
 
+      // AR.js GPS
       arjsModel.setAttribute('gltf-model', modelUrl);
       arjsModel.setAttribute('scale', '0.05 0.05 0.05');
 
-      statusEl.textContent = 'Modelo carregado. Entre em AR e toque para ancorar (ou aponte para o marcador).';
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+
+          // desloca 3m para o norte (dy=3)
+          const target = offsetLatLon(lat, lon, 0, 3);
+
+          arjsModel.setAttribute('gps-entity-place', `latitude: ${target.lat}; longitude: ${target.lon}`);
+          statusEl.textContent = `Modelo carregado ~3m à frente (lat: ${target.lat.toFixed(5)}, lon: ${target.lon.toFixed(5)}).`;
+        }, err => {
+          statusEl.textContent = 'Não foi possível obter sua localização.';
+        });
+      } else {
+        statusEl.textContent = 'Seu dispositivo não suporta geolocalização.';
+      }
+
       resetBtn.disabled = false;
     });
 
-    // --- eventos do ar-hit-test (A-Frame/WebXR) ---
+    // --- eventos WebXR ---
     webxrScene.addEventListener('ar-hit-test-start', () => {
-      statusEl.textContent = 'Escaneando superfícies... mova a câmera até ver o retículo.';
+      statusEl.textContent = 'Escaneando superfícies...';
     });
     webxrScene.addEventListener('ar-hit-test-achieved', () => {
       statusEl.textContent = 'Superfície detectada! Toque para posicionar.';
     });
     webxrScene.addEventListener('ar-hit-test-select', () => {
-      // Quando toca, o ar-hit-test move o #webxrModel e seta visible=true
-      statusEl.textContent = 'Modelo ancorado. Caminhe ao redor para ver a profundidade.';
+      statusEl.textContent = 'Modelo ancorado. Caminhe ao redor.';
     });
 
-    // --- reset (para os dois modos) ---
+    // --- reset ---
     resetBtn.addEventListener('click', () => {
       if (webxrScene.style.display !== 'none') {
-        webxrModel.setAttribute('visible', 'false'); // some até um novo select
-        statusEl.textContent = 'Resetado. Procure o retículo e toque para ancorar novamente.';
+        webxrModel.setAttribute('visible', 'false');
+        statusEl.textContent = 'Resetado. Procure o retículo novamente.';
       }
       if (arjsScene.style.display !== 'none') {
-        // no AR.js, o modelo fica no marcador; reset = apenas feedback
-        statusEl.textContent = 'Aponte novamente para o marcador HIRO para ver o modelo.';
+        arjsModel.removeAttribute('gps-entity-place');
+        statusEl.textContent = 'Resetado. Recarregue o modelo para reposicionar.';
       }
     });
   </script>

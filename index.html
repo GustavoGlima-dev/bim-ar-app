@@ -7,37 +7,24 @@
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js com GPS -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-gps.js"></script>
+  <!-- AR.js genérico (abre a câmera sempre) -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <!-- Gestos -->
   <script src="https://unpkg.com/aframe-gesture-detector/dist/aframe-gesture-detector.min.js"></script>
   <script src="https://unpkg.com/aframe-gesture-handler/dist/aframe-gesture-handler.min.js"></script>
 
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-    }
+    body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow: hidden; }
     .container {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      z-index: 9999;
-      background: rgba(255,255,255,0.95);
-      padding: 20px;
-      text-align: center;
+      position: absolute; top: 0; left: 0; right: 0;
+      z-index: 9999; background: rgba(255,255,255,0.95);
+      padding: 20px; text-align: center;
     }
     h1 { font-size: 1.4rem; margin: 0 0 10px; }
     .upload-button {
-      background-color: #2563eb;
-      color: white;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 1rem;
-      font-weight: 600;
+      background-color: #2563eb; color: white;
+      padding: 10px 20px; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 1rem; font-weight: 600;
     }
     .status-message { margin-top: 10px; font-size: 1rem; color: #0891b2; }
   </style>
@@ -58,9 +45,8 @@
     arjs="sourceType: webcam; debugUIEnabled: false;"
     gesture-detector
   >
-    <!-- modelo será inserido aqui -->
     <a-entity id="model-container"></a-entity>
-    <a-entity camera gps-camera rotation-reader></a-entity>
+    <a-entity camera></a-entity>
   </a-scene>
 
   <script>
@@ -86,21 +72,19 @@
           const model = document.createElement('a-entity');
           model.setAttribute('gltf-model', modelUrl);
           model.setAttribute('scale', '0.05 0.05 0.05');
+          model.setAttribute('position', '0 0 -3'); // aparece 3m à frente sempre
           model.setAttribute('animation-mixer', '');
 
-          // pega localização atual e insere GPS
+          // tenta aplicar GPS
           if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
               const lat = pos.coords.latitude;
               const lon = pos.coords.longitude;
               model.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lon}`);
-              showStatus(`Modelo carregado na sua posição GPS (lat:${lat.toFixed(5)}, lon:${lon.toFixed(5)}).`);
+              showStatus(`Modelo reposicionado no GPS (lat:${lat.toFixed(5)}, lon:${lon.toFixed(5)}).`);
             }, err => {
-              showStatus("Erro GPS: " + err.message);
-              model.setAttribute('position', '0 0 -3'); // fallback 3m à frente
+              showStatus("Erro GPS, mantendo posição fixa. " + err.message);
             });
-          } else {
-            model.setAttribute('position', '0 0 -3'); // fallback
           }
 
           // gestos
@@ -108,7 +92,6 @@
             model.setAttribute('ios-gestures', 'factor: 0.003; zoomFactor: 0.005');
           } else {
             model.setAttribute('gesture-handler', 'minScale: 0.01; maxScale: 2');
-            model.setAttribute('drag-move', 'factor: 0.003');
           }
 
           model.addEventListener('model-loaded', () => {

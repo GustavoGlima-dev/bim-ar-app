@@ -3,14 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Tap-to-Place (WebXR + fallback frente da câmera)</title>
-
-  <!-- A-Frame -->
+  <title>Fallback Fake AR</title>
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-
-  <!-- AR.js básico -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
   <style>
     body { margin:0; font-family: Inter, system-ui, Arial; }
     #ui {
@@ -23,145 +17,56 @@
       padding:10px 14px; font-weight:600; cursor:pointer;
     }
     .hint { color:#0b7285; font-size:.95rem }
-    .small { font-size:.85rem; color:#555 }
     input[type=file]{ display:none; }
+    video#bgVideo {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      object-fit: cover; z-index:-1;
+    }
   </style>
 </head>
 <body>
   <div id="ui">
     <label class="btn" for="fileInput">Selecionar .glb/.gltf</label>
     <input id="fileInput" type="file" accept=".glb,.gltf" />
-    <button id="resetBtn" class="btn" disabled>Resetar</button>
     <span id="status" class="hint">Carregue um modelo para começar.</span>
-    <span id="iosNote" class="small" style="display:none">
-      iOS (fallback): o modelo aparecerá sempre ~3 metros à frente da câmera.
-    </span>
   </div>
 
-  <!-- ======== CENA WEBXR (Android/Chrome) ======== -->
-  <a-scene
-    id="webxrScene"
-    embedded
-    renderer="colorManagement:true;physicallyCorrectLights:true"
-    xr-mode-ui="enabled:true"
-    webxr="optionalFeatures: hit-test,anchors,dom-overlay; overlayElement:#ui; requiredFeatures: local-floor"
-    ar-hit-test="target: #webxrModel"
-    style="display:none"
-  >
-    <a-entity light="type:hemisphere; intensity: 1"></a-entity>
-    <a-entity id="webxrModel" visible="false"></a-entity>
-  </a-scene>
+  <!-- vídeo da câmera como fundo -->
+  <video id="bgVideo" autoplay playsinline muted></video>
 
-  <!-- ======== CENA fallback AR.js ======== -->
-  <a-scene
-    id="arjsScene"
-    embedded
-    vr-mode-ui="enabled:false"
-    arjs="sourceType: webcam; debugUIEnabled:false"
-    style="display:none"
-  >
-    <a-entity id="arjsModel" scale="0.05 0.05 0.05" visible="false"></a-entity>
-    <a-entity camera id="arjsCamera"></a-entity>
+  <!-- cena A-Frame normal -->
+  <a-scene embedded vr-mode-ui="enabled:false">
+    <a-entity id="fakeModel" visible="false"></a-entity>
+    <a-entity camera></a-entity>
   </a-scene>
 
   <script>
-    const $ = s => document.querySelector(s);
-    const fileInput = $('#fileInput');
-    const resetBtn  = $('#resetBtn');
-    const statusEl  = $('#status');
-    const iosNote   = $('#iosNote');
-    const webxrScene = $('#webxrScene');
-    const arjsScene  = $('#arjsScene');
-    const webxrModel = $('#webxrModel');
-    const arjsModel  = $('#arjsModel');
-    let modelUrl = null;
+    const fileInput = document.getElementById('fileInput');
+    const fakeModel = document.getElementById('fakeModel');
+    const statusEl  = document.getElementById('status');
+    const bgVideo   = document.getElementById('bgVideo');
 
-    // --- componente que força modelo 3m à frente ---
-    AFRAME.registerComponent('follow-camera-forward', {
-      tick: function () {
-        const cam = document.querySelector('#arjsCamera').object3D;
-        const model = document.querySelector('#arjsModel').object3D;
-        if (!model.visible) return;
+    // pede a câmera e mostra no <video>
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(stream => {
+        bgVideo.srcObject = stream;
+      })
+      .catch(err => {
+        statusEl.textContent = "Erro ao acessar câmera: " + err.message;
+      });
 
-        const pos = new THREE.Vector3();
-        cam.getWorldPosition(pos);
-
-        const dir = new THREE.Vector3();
-        cam.getWorldDirection(dir);
-
-        const target = pos.clone().add(dir.multiplyScalar(3));
-        model.position.copy(target);
-      }
-    });
-
-    // --- detecção WebXR ---
-    async function detectAndInit() {
-      const supportsXR = !!(navigator.xr && navigator.xr.isSessionSupported);
-      let arSupported = false;
-      try {
-        arSupported = supportsXR && await navigator.xr.isSessionSupported('immersive-ar');
-      } catch(e) { arSupported = false; }
-
-      if (arSupported) {
-        webxrScene.style.display = '';
-        arjsScene.style.display  = 'none';
-        statusEl.textContent = 'Carregue um modelo e toque "Enter AR".';
-      } else {
-        webxrScene.style.display = 'none';
-        arjsScene.style.display  = '';
-        iosNote.style.display    = '';
-        statusEl.textContent = 'Carregue um modelo. Ele aparecerá ~3m à frente do seu olhar.';
-      }
-      resetBtn.disabled = true;
-    }
-    detectAndInit();
-
-    // --- upload do modelo ---
+    // upload do modelo
     fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
-      modelUrl = URL.createObjectURL(file);
+      const url = URL.createObjectURL(file);
 
-      // limpar anteriores
-      while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
-      while (arjsModel.firstChild)  arjsModel.removeChild(arjsModel.firstChild);
+      fakeModel.setAttribute('gltf-model', url);
+      fakeModel.setAttribute('scale', '0.05 0.05 0.05');
+      fakeModel.setAttribute('position', '0 0 -2'); //2 metros
+      fakeModel.setAttribute('visible', 'true');
 
-      // WebXR
-      webxrModel.setAttribute('gltf-model', modelUrl);
-      webxrModel.setAttribute('scale', '0.05 0.05 0.05');
-      webxrModel.setAttribute('visible', 'false');
-
-      // fallback AR.js
-      arjsModel.setAttribute('gltf-model', modelUrl);
-      arjsModel.setAttribute('scale', '0.05 0.05 0.05');
-      arjsModel.setAttribute('visible', 'true');
-      arjsModel.setAttribute('follow-camera-forward', ''); // ativa o componente
-
-      // força primeira posição na frente (sem esperar tick)
-      setTimeout(() => {
-        const cam = document.querySelector('#arjsCamera').object3D;
-        const pos = new THREE.Vector3();
-        cam.getWorldPosition(pos);
-        const dir = new THREE.Vector3();
-        cam.getWorldDirection(dir);
-        const target = pos.clone().add(dir.multiplyScalar(3));
-        arjsModel.object3D.position.copy(target);
-      }, 500);
-
-      statusEl.textContent = 'Modelo carregado. Deve aparecer 3m à frente.';
-      resetBtn.disabled = false;
-    });
-
-    // --- reset ---
-    resetBtn.addEventListener('click', () => {
-      if (webxrScene.style.display !== 'none') {
-        webxrModel.setAttribute('visible', 'false');
-        statusEl.textContent = 'Resetado. Procure o retículo novamente.';
-      }
-      if (arjsScene.style.display !== 'none') {
-        arjsModel.setAttribute('visible', 'true');
-        statusEl.textContent = 'Modelo reposicionado ~3m à frente.';
-      }
+      statusEl.textContent = "Modelo carregado (fake AR, sempre 3m à frente).";
     });
   </script>
 </body>

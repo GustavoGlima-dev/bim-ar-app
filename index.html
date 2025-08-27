@@ -6,17 +6,17 @@
   <title>Visualizador BIM em AR</title>
 
   <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js genérico (abre a câmera sempre) -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+  <!-- AR.js com GPS -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-gps.js"></script>
   <!-- Gestos -->
   <script src="https://unpkg.com/aframe-gesture-detector/dist/aframe-gesture-detector.min.js"></script>
   <script src="https://unpkg.com/aframe-gesture-handler/dist/aframe-gesture-handler.min.js"></script>
 
   <style>
-    body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; overflow: hidden; }
+    body { font-family: 'Inter', sans-serif; margin:0; padding:0; overflow:hidden; }
     .container {
-      position: absolute; top: 0; left: 0; right: 0;
+      position: absolute; top:0; left:0; right:0;
       z-index: 9999; background: rgba(255,255,255,0.95);
       padding: 20px; text-align: center;
     }
@@ -38,74 +38,99 @@
     <div class="status-message" id="status"></div>
   </div>
 
-  <a-scene 
-    id="ar-scene" 
-    vr-mode-ui="enabled: false"
+  <!-- Cena WebXR (Android/Chrome) -->
+  <a-scene id="webxrScene"
     embedded
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-    gesture-detector
+    xr-mode-ui="enabled:true"
+    webxr="optionalFeatures: hit-test,dom-overlay; overlayElement:#app-container; requiredFeatures: local-floor"
+    ar-hit-test="target: #webxrModel"
+    vr-mode-ui="enabled:false"
+    renderer="colorManagement:true;physicallyCorrectLights:true"
+    style="display:none"
   >
-    <a-entity id="model-container"></a-entity>
+    <a-entity light="type:hemisphere; intensity:1"></a-entity>
+    <a-entity id="webxrModel" visible="false"></a-entity>
     <a-entity camera></a-entity>
   </a-scene>
 
+  <!-- Cena AR.js GPS (iOS/Safari) -->
+  <a-scene id="gpsScene"
+    embedded
+    vr-mode-ui="enabled:false"
+    arjs="sourceType: webcam; debugUIEnabled:false"
+    style="display:none"
+  >
+    <a-entity id="gpsModel" scale="0.05 0.05 0.05"></a-entity>
+    <a-entity camera gps-camera rotation-reader></a-entity>
+  </a-scene>
+
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const fileInput = document.getElementById('fileInput');
-      const statusDiv = document.getElementById('status');
-      const arScene = document.getElementById('ar-scene');
-      const appContainer = document.getElementById('app-container');
-      const modelContainer = document.getElementById('model-container');
-      let modelUrl = null;
+    const fileInput    = document.getElementById('fileInput');
+    const statusDiv    = document.getElementById('status');
+    const appContainer = document.getElementById('app-container');
+    const webxrScene   = document.getElementById('webxrScene');
+    const gpsScene     = document.getElementById('gpsScene');
+    const webxrModel   = document.getElementById('webxrModel');
+    const gpsModel     = document.getElementById('gpsModel');
 
-      function showStatus(message) { statusDiv.innerText = message; }
+    function showStatus(msg){ statusDiv.innerText = msg; }
 
-      fileInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
+    // Detectar suporte WebXR
+    async function detectAndInit() {
+      let arSupported = false;
+      try {
+        arSupported = navigator.xr && await navigator.xr.isSessionSupported('immersive-ar');
+      } catch(e){}
+      if (arSupported) {
+        webxrScene.style.display = '';
+        gpsScene.style.display   = 'none';
+        showStatus("Android/Chrome → pronto para WebXR (toque em 'Enter AR').");
+      } else {
+        webxrScene.style.display = 'none';
+        gpsScene.style.display   = '';
+        showStatus("iOS/Safari → pronto para AR.js com GPS.");
+      }
+    }
+    detectAndInit();
 
-        showStatus('Processando arquivo...');
-        try {
-          modelUrl = URL.createObjectURL(file);
-          while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
+    // Upload do modelo
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
 
-          const model = document.createElement('a-entity');
-          model.setAttribute('gltf-model', modelUrl);
-          model.setAttribute('scale', '0.05 0.05 0.05');
-          model.setAttribute('position', '0 0 -3'); // aparece 3m à frente sempre
-          model.setAttribute('animation-mixer', '');
+      // WebXR
+      while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
+      webxrModel.setAttribute('gltf-model', url);
+      webxrModel.setAttribute('scale', '0.05 0.05 0.05');
+      webxrModel.setAttribute('visible', 'false');
 
-          // tenta aplicar GPS
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-              const lat = pos.coords.latitude;
-              const lon = pos.coords.longitude;
-              model.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lon}`);
-              showStatus(`Modelo reposicionado no GPS (lat:${lat.toFixed(5)}, lon:${lon.toFixed(5)}).`);
-            }, err => {
-              showStatus("Erro GPS, mantendo posição fixa. " + err.message);
-            });
-          }
+      // GPS
+      while (gpsModel.firstChild) gpsModel.removeChild(gpsModel.firstChild);
+      gpsModel.setAttribute('gltf-model', url);
+      gpsModel.setAttribute('scale', '0.05 0.05 0.05');
 
-          // gestos
-          if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-            model.setAttribute('ios-gestures', 'factor: 0.003; zoomFactor: 0.005');
-          } else {
-            model.setAttribute('gesture-handler', 'minScale: 0.01; maxScale: 2');
-          }
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          gpsModel.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lon}`);
+          showStatus(`Modelo pronto em (${lat.toFixed(5)}, ${lon.toFixed(5)}).`);
+        }, err => {
+          showStatus("Erro GPS: " + err.message);
+        });
+      }
+    });
 
-          model.addEventListener('model-loaded', () => {
-            appContainer.style.display = 'none';
-            arScene.style.display = 'block';
-            showStatus('Modelo carregado! Interaja com gestos ou mouse.');
-          });
-
-          modelContainer.appendChild(model);
-        } catch (error) {
-          console.error('Erro ao processar o arquivo:', error);
-          showStatus('Falha ao carregar o modelo.');
-        }
-      });
+    // Eventos WebXR
+    webxrScene.addEventListener('ar-hit-test-start', () => {
+      showStatus("Escaneando superfícies...");
+    });
+    webxrScene.addEventListener('ar-hit-test-achieved', () => {
+      showStatus("Superfície detectada! Toque para posicionar o modelo.");
+    });
+    webxrScene.addEventListener('ar-hit-test-select', () => {
+      showStatus("Modelo ancorado no espaço. Caminhe ao redor!");
     });
   </script>
 </body>

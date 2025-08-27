@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Tap-to-Place (WebXR c/ fallback Camera-offset)</title>
+  <title>AR Tap-to-Place (WebXR + fallback frente da câmera)</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
 
-  <!-- AR.js básico (sem GPS) -->
+  <!-- AR.js básico (sem marcador/GPS) -->
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
@@ -34,7 +34,7 @@
     <button id="resetBtn" class="btn" disabled>Resetar</button>
     <span id="status" class="hint">Carregue um modelo para começar.</span>
     <span id="iosNote" class="small" style="display:none">
-      iOS: fallback sem GPS/HIRO → o modelo aparecerá sempre ~3 metros à frente da câmera.
+      iOS (fallback): o modelo aparecerá sempre ~3 metros à frente da câmera.
     </span>
   </div>
 
@@ -52,7 +52,7 @@
     <a-entity id="webxrModel" visible="false"></a-entity>
   </a-scene>
 
-  <!-- ======== CENA fallback AR.js (sem marcador, sem GPS) ======== -->
+  <!-- ======== CENA fallback AR.js ======== -->
   <a-scene
     id="arjsScene"
     embedded
@@ -74,8 +74,29 @@
     const arjsScene  = $('#arjsScene');
     const webxrModel = $('#webxrModel');
     const arjsModel  = $('#arjsModel');
-    const arjsCamera = $('#arjsCamera');
     let modelUrl = null;
+
+    // --- componente para manter modelo 3m à frente da câmera ---
+    AFRAME.registerComponent('follow-camera-forward', {
+      tick: function () {
+        const cam = document.querySelector('#arjsCamera').object3D;
+        const model = document.querySelector('#arjsModel').object3D;
+        if (!model.visible) return;
+
+        const pos = new THREE.Vector3();
+        cam.getWorldPosition(pos);
+
+        const dir = new THREE.Vector3();
+        cam.getWorldDirection(dir);
+
+        // posição = câmera + direção*3m
+        const target = pos.clone().add(dir.multiplyScalar(3));
+        model.position.copy(target);
+
+        // opcional: fixar altura 0
+        // model.position.y = 0;
+      }
+    });
 
     // --- detecção WebXR ---
     async function detectAndInit() {
@@ -105,7 +126,7 @@
       if (!file) return;
       modelUrl = URL.createObjectURL(file);
 
-      // limpar modelos anteriores
+      // limpar anteriores
       while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
       while (arjsModel.firstChild)  arjsModel.removeChild(arjsModel.firstChild);
 
@@ -114,36 +135,25 @@
       webxrModel.setAttribute('scale', '0.05 0.05 0.05');
       webxrModel.setAttribute('visible', 'false');
 
-      // fallback AR.js (só mostra depois)
+      // fallback AR.js
       arjsModel.setAttribute('gltf-model', modelUrl);
       arjsModel.setAttribute('scale', '0.05 0.05 0.05');
       arjsModel.setAttribute('visible', 'true');
+      arjsModel.setAttribute('follow-camera-forward', ''); // ativa o componente
 
-      statusEl.textContent = 'Modelo carregado.';
+      statusEl.textContent = 'Modelo carregado. Ele está 3m à frente da câmera.';
       resetBtn.disabled = false;
     });
 
-    // --- reposiciona sempre 3m à frente da câmera ---
-    arjsScene.addEventListener('renderstart', () => {
-      arjsScene.addEventListener('render-target-loaded', () => {
-        arjsScene.addEventListener('frame', () => {
-          if (arjsModel.getAttribute('visible') === true) {
-            const cam = arjsCamera.object3D;
-            const pos = new THREE.Vector3();
-            cam.getWorldPosition(pos);
-
-            const dir = new THREE.Vector3();
-            cam.getWorldDirection(dir);
-
-            // posição = câmera + (direção * 3m)
-            const target = pos.clone().add(dir.multiplyScalar(3));
-            arjsModel.object3D.position.copy(target);
-
-            // opcional: manter sempre "no chão virtual"
-            // arjsModel.object3D.position.y = 0;
-          }
-        });
-      });
+    // --- eventos do WebXR ---
+    webxrScene.addEventListener('ar-hit-test-start', () => {
+      statusEl.textContent = 'Escaneando superfícies...';
+    });
+    webxrScene.addEventListener('ar-hit-test-achieved', () => {
+      statusEl.textContent = 'Superfície detectada! Toque para posicionar.';
+    });
+    webxrScene.addEventListener('ar-hit-test-select', () => {
+      statusEl.textContent = 'Modelo ancorado. Caminhe ao redor.';
     });
 
     // --- reset ---
@@ -153,8 +163,8 @@
         statusEl.textContent = 'Resetado. Procure o retículo novamente.';
       }
       if (arjsScene.style.display !== 'none') {
-        arjsModel.setAttribute('visible', 'false');
-        statusEl.textContent = 'Resetado. Carregue novamente para reposicionar.';
+        arjsModel.setAttribute('visible', 'true');
+        statusEl.textContent = 'Modelo reposicionado ~3m à frente.';
       }
     });
   </script>

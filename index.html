@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR GPS + WebXR</title>
+  <title>AR Tap-to-Place (WebXR c/ fallback Camera-offset)</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
 
-  <!-- AR.js com GPS -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+  <!-- AR.js básico (sem GPS) -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
     body { margin:0; font-family: Inter, system-ui, Arial; }
@@ -34,7 +34,7 @@
     <button id="resetBtn" class="btn" disabled>Resetar</button>
     <span id="status" class="hint">Carregue um modelo para começar.</span>
     <span id="iosNote" class="small" style="display:none">
-      iOS: este modo usa <b>GPS AR</b>. O modelo será colocado ~3 metros à frente de você.
+      iOS: fallback sem GPS/HIRO → o modelo aparecerá sempre ~3 metros à frente da câmera.
     </span>
   </div>
 
@@ -52,7 +52,7 @@
     <a-entity id="webxrModel" visible="false"></a-entity>
   </a-scene>
 
-  <!-- ======== CENA AR.js (Fallback iOS com GPS) ======== -->
+  <!-- ======== CENA fallback AR.js (sem marcador, sem GPS) ======== -->
   <a-scene
     id="arjsScene"
     embedded
@@ -60,10 +60,8 @@
     arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled:false"
     style="display:none"
   >
-    <a-entity id="arjsModel" scale="0.05 0.05 0.05"></a-entity>
-
-    <!-- câmera com GPS -->
-    <a-entity camera gps-camera rotation-reader></a-entity>
+    <a-entity id="arjsModel" scale="0.05 0.05 0.05" visible="false"></a-entity>
+    <a-entity camera id="arjsCamera"></a-entity>
   </a-scene>
 
   <script>
@@ -76,6 +74,7 @@
     const arjsScene  = $('#arjsScene');
     const webxrModel = $('#webxrModel');
     const arjsModel  = $('#arjsModel');
+    const arjsCamera = $('#arjsCamera');
     let modelUrl = null;
 
     // --- detecção WebXR ---
@@ -94,23 +93,11 @@
         webxrScene.style.display = 'none';
         arjsScene.style.display  = '';
         iosNote.style.display    = '';
-        statusEl.textContent = 'Carregue um modelo. Ele aparecerá ~3 metros à frente de você.';
+        statusEl.textContent = 'Carregue um modelo. Ele aparecerá ~3m à frente do seu olhar.';
       }
       resetBtn.disabled = true;
     }
     detectAndInit();
-
-    // --- helper para deslocar em metros ---
-    function offsetLatLon(lat, lon, dx, dy) {
-      // dx = metros para leste (+) / oeste (-)
-      // dy = metros para norte (+) / sul (-)
-      const latOffset = dy / 111111;
-      const lonOffset = dx / (111111 * Math.cos(lat * Math.PI / 180));
-      return {
-        lat: lat + latOffset,
-        lon: lon + lonOffset
-      };
-    }
 
     // --- upload do modelo ---
     fileInput.addEventListener('change', e => {
@@ -118,7 +105,7 @@
       if (!file) return;
       modelUrl = URL.createObjectURL(file);
 
-      // limpa
+      // limpar modelos anteriores
       while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
       while (arjsModel.firstChild)  arjsModel.removeChild(arjsModel.firstChild);
 
@@ -127,39 +114,36 @@
       webxrModel.setAttribute('scale', '0.05 0.05 0.05');
       webxrModel.setAttribute('visible', 'false');
 
-      // AR.js GPS
+      // fallback AR.js (só mostra depois)
       arjsModel.setAttribute('gltf-model', modelUrl);
       arjsModel.setAttribute('scale', '0.05 0.05 0.05');
+      arjsModel.setAttribute('visible', 'true');
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(pos => {
-          const lat = pos.coords.latitude;
-          const lon = pos.coords.longitude;
-
-          // desloca 3m para o norte (dy=3)
-          const target = offsetLatLon(lat, lon, 0, 3);
-
-          arjsModel.setAttribute('gps-entity-place', `latitude: ${target.lat}; longitude: ${target.lon}`);
-          statusEl.textContent = `Modelo carregado ~3m à frente (lat: ${target.lat.toFixed(5)}, lon: ${target.lon.toFixed(5)}).`;
-        }, err => {
-          statusEl.textContent = 'Não foi possível obter sua localização.';
-        });
-      } else {
-        statusEl.textContent = 'Seu dispositivo não suporta geolocalização.';
-      }
-
+      statusEl.textContent = 'Modelo carregado.';
       resetBtn.disabled = false;
     });
 
-    // --- eventos WebXR ---
-    webxrScene.addEventListener('ar-hit-test-start', () => {
-      statusEl.textContent = 'Escaneando superfícies...';
-    });
-    webxrScene.addEventListener('ar-hit-test-achieved', () => {
-      statusEl.textContent = 'Superfície detectada! Toque para posicionar.';
-    });
-    webxrScene.addEventListener('ar-hit-test-select', () => {
-      statusEl.textContent = 'Modelo ancorado. Caminhe ao redor.';
+    // --- reposiciona sempre 3m à frente da câmera ---
+    arjsScene.addEventListener('renderstart', () => {
+      arjsScene.addEventListener('render-target-loaded', () => {
+        arjsScene.addEventListener('frame', () => {
+          if (arjsModel.getAttribute('visible') === true) {
+            const cam = arjsCamera.object3D;
+            const pos = new THREE.Vector3();
+            cam.getWorldPosition(pos);
+
+            const dir = new THREE.Vector3();
+            cam.getWorldDirection(dir);
+
+            // posição = câmera + (direção * 3m)
+            const target = pos.clone().add(dir.multiplyScalar(3));
+            arjsModel.object3D.position.copy(target);
+
+            // opcional: manter sempre "no chão virtual"
+            // arjsModel.object3D.position.y = 0;
+          }
+        });
+      });
     });
 
     // --- reset ---
@@ -169,8 +153,8 @@
         statusEl.textContent = 'Resetado. Procure o retículo novamente.';
       }
       if (arjsScene.style.display !== 'none') {
-        arjsModel.removeAttribute('gps-entity-place');
-        statusEl.textContent = 'Resetado. Recarregue o modelo para reposicionar.';
+        arjsModel.setAttribute('visible', 'false');
+        statusEl.textContent = 'Resetado. Carregue novamente para reposicionar.';
       }
     });
   </script>

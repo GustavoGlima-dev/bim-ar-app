@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR WebXR + Fallback GPS</title>
+  <title>AR WebXR + Fallback GPS Direcional</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
@@ -25,6 +25,7 @@
   <div id="ui">
     <label class="btn" for="fileInput">Selecionar Modelo (.glb/.gltf)</label>
     <input id="fileInput" type="file" accept=".glb,.gltf" />
+    <button id="startBtn" class="btn" style="display:none">Ativar AR</button>
     <span id="status">Carregue um modelo para começar</span>
   </div>
 
@@ -55,20 +56,47 @@
   </a-scene>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const statusEl  = document.getElementById('status');
+    const fileInput  = document.getElementById('fileInput');
+    const startBtn   = document.getElementById('startBtn');
+    const statusEl   = document.getElementById('status');
     const webxrScene = document.getElementById('webxrScene');
     const arjsScene  = document.getElementById('arjsScene');
     const webxrModel = document.getElementById('webxrModel');
     const arjsModel  = document.getElementById('arjsModel');
     let modelUrl = null;
+    let heading = null; // graus da bússola
 
-    // --- helper para deslocar em metros ---
-    function offsetLatLon(lat, lon, dx, dy) {
-      const latOffset = dy / 111111; // metros norte/sul
-      const lonOffset = dx / (111111 * Math.cos(lat * Math.PI / 180)); // metros leste/oeste
-      return { lat: lat + latOffset, lon: lon + lonOffset };
+    // --- helper: deslocar lat/lon ---
+    function offsetLatLon(lat, lon, distance, bearing) {
+      const R = 6378137; // raio da Terra em metros
+      const radLat = lat * Math.PI/180;
+      const radLon = lon * Math.PI/180;
+      const radBearing = bearing * Math.PI/180;
+
+      const newLat = Math.asin(
+        Math.sin(radLat)*Math.cos(distance/R) +
+        Math.cos(radLat)*Math.sin(distance/R)*Math.cos(radBearing)
+      );
+      const newLon = radLon + Math.atan2(
+        Math.sin(radBearing)*Math.sin(distance/R)*Math.cos(radLat),
+        Math.cos(distance/R)-Math.sin(radLat)*Math.sin(newLat)
+      );
+
+      return { lat: newLat*180/Math.PI, lon: newLon*180/Math.PI };
     }
+
+    // --- capturar heading do dispositivo ---
+    window.addEventListener("deviceorientationabsolute", e => {
+      if (e.alpha !== null) {
+        heading = 360 - e.alpha; // 0=norte
+      }
+    }, true);
+
+    window.addEventListener("deviceorientation", e => {
+      if (e.webkitCompassHeading) {
+        heading = e.webkitCompassHeading; // Safari iOS
+      }
+    }, true);
 
     // --- detectar suporte WebXR ---
     async function detectAndInit() {
@@ -82,13 +110,35 @@
         statusEl.textContent = 'Toque em "Enter AR" para começar.';
       } else {
         webxrScene.style.display = 'none';
-        arjsScene.style.display  = '';
-        statusEl.textContent = 'Fallback GPS ativo. O modelo será colocado na sua posição (~5m à frente).';
+        arjsScene.style.display  = 'none'; // só abre após "Ativar AR"
+        startBtn.style.display   = '';     // mostra botão
+        statusEl.textContent = 'iOS detectado. Toque em "Ativar AR" para liberar câmera e GPS.';
       }
     }
     detectAndInit();
 
-    // --- carregar modelo ---
+    // --- clique em Ativar AR ---
+    startBtn.addEventListener('click', () => {
+      // pedir permissão para orientation (iOS 13+)
+      if (typeof DeviceOrientationEvent !== 'undefined'
+          && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().catch(console.error);
+      }
+
+      // pedir localização (necessário mesmo se já tiver)
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(() => {
+          console.log("GPS liberado");
+        });
+      }
+
+      // mostrar cena AR.js
+      arjsScene.style.display = '';
+      startBtn.style.display  = 'none';
+      statusEl.textContent    = 'Carregue um modelo para colocar em AR.';
+    });
+
+    // --- upload modelo ---
     fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
@@ -111,17 +161,15 @@
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
-          // desloca 5m ao norte
-          const target = offsetLatLon(lat, lon, 0, 5);
+          const dir = heading !== null ? heading : 0; // fallback norte
+          const target = offsetLatLon(lat, lon, 5, dir); // 5m à frente
+
           arjsModel.setAttribute('gps-entity-place',
             `latitude: ${target.lat}; longitude: ${target.lon}`);
-          statusEl.textContent =
-            `Modelo carregado a ~5m da sua posição (lat:${target.lat.toFixed(5)}, lon:${target.lon.toFixed(5)})`;
+          statusEl.textContent = `Modelo carregado ~5m à frente (dir: ${dir.toFixed(0)}°).`;
         }, err => {
-          statusEl.textContent = 'Erro ao obter localização: ' + err.message;
+          statusEl.textContent = 'Erro GPS: ' + err.message;
         });
-      } else {
-        statusEl.textContent = 'Seu dispositivo não suporta geolocalização.';
       }
     });
 

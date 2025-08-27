@@ -8,7 +8,7 @@
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <!-- AR.js com GPS -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-gps.js"></script>
 
   <style>
     body { margin:0; font-family: Inter, system-ui, Arial; }
@@ -63,6 +63,13 @@
     const arjsModel  = document.getElementById('arjsModel');
     let modelUrl = null;
 
+    // --- helper para deslocar em metros ---
+    function offsetLatLon(lat, lon, dx, dy) {
+      const latOffset = dy / 111111; // metros norte/sul
+      const lonOffset = dx / (111111 * Math.cos(lat * Math.PI / 180)); // metros leste/oeste
+      return { lat: lat + latOffset, lon: lon + lonOffset };
+    }
+
     // --- detectar suporte WebXR ---
     async function detectAndInit() {
       let arSupported = false;
@@ -76,7 +83,7 @@
       } else {
         webxrScene.style.display = 'none';
         arjsScene.style.display  = '';
-        statusEl.textContent = 'Fallback GPS ativo. O modelo será colocado na sua posição atual.';
+        statusEl.textContent = 'Fallback GPS ativo. O modelo será colocado na sua posição (~5m à frente).';
       }
     }
     detectAndInit();
@@ -96,7 +103,7 @@
       webxrModel.setAttribute('scale', '0.05 0.05 0.05');
       webxrModel.setAttribute('visible', 'false');
 
-      // AR.js GPS → posição do usuário
+      // AR.js GPS
       arjsModel.setAttribute('gltf-model', modelUrl);
       arjsModel.setAttribute('scale', '0.05 0.05 0.05');
 
@@ -104,8 +111,12 @@
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lon = pos.coords.longitude;
-          arjsModel.setAttribute('gps-entity-place', `latitude: ${lat}; longitude: ${lon}`);
-          statusEl.textContent = `Modelo carregado na sua posição (lat:${lat.toFixed(5)}, lon:${lon.toFixed(5)}).`;
+          // desloca 5m ao norte
+          const target = offsetLatLon(lat, lon, 0, 5);
+          arjsModel.setAttribute('gps-entity-place',
+            `latitude: ${target.lat}; longitude: ${target.lon}`);
+          statusEl.textContent =
+            `Modelo carregado a ~5m da sua posição (lat:${target.lat.toFixed(5)}, lon:${target.lon.toFixed(5)})`;
         }, err => {
           statusEl.textContent = 'Erro ao obter localização: ' + err.message;
         });

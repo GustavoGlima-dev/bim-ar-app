@@ -7,8 +7,6 @@
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- IFC.js UMD (sem módulos ES6, direto no navegador) -->
-  <script src="https://unpkg.com/web-ifc-three@0.0.43/IFCLoader.umd.js"></script>
 
   <style>
     body { font-family: 'Inter', sans-serif; margin:0; padding:0; overflow:hidden; }
@@ -43,7 +41,10 @@
     <a-entity light="type:ambient; intensity:0.5"></a-entity>
   </a-scene>
 
-  <script>
+  <!-- Script principal -->
+  <script type="module">
+    import { IFCLoader } from "https://unpkg.com/web-ifc-three@0.0.43/IFCLoader.js";
+
     const fileInput = document.getElementById('fileInput');
     const statusDiv = document.getElementById('status');
     const modelContainer = document.getElementById('model-container');
@@ -56,21 +57,23 @@
 
       showStatus("Carregando arquivo IFC...");
 
-      const loader = new IFCLoader(); // vem do UMD
-      loader.ifcManager.setWasmPath("https://unpkg.com/web-ifc@0.0.43/");
+      const ifcLoader = new IFCLoader();
+      ifcLoader.ifcManager.setWasmPath("https://unpkg.com/web-ifc@0.0.43/");
 
       const url = URL.createObjectURL(file);
 
       try {
-        loader.load(url, (model) => {
-          // limpa modelo anterior
-          while (modelContainer.object3D.children.length) {
-            modelContainer.object3D.remove(modelContainer.object3D.children[0]);
-          }
-          // adiciona novo
-          modelContainer.object3D.add(model);
-          showStatus("Modelo IFC carregado!");
-        });
+        const model = await ifcLoader.loadAsync(url);
+
+        // Limpa qualquer modelo anterior
+        while (modelContainer.object3D.children.length) {
+          modelContainer.object3D.remove(modelContainer.object3D.children[0]);
+        }
+
+        // Adiciona o IFC carregado
+        modelContainer.object3D.add(model);
+
+        showStatus("Modelo IFC carregado!");
       } catch (err) {
         console.error(err);
         showStatus("Erro ao carregar o IFC.");

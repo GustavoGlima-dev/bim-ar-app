@@ -3,17 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visualizador IFC em AR</title>
+  <title>Visualizador IFC</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js (abre câmera direto) -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <!-- IFC.js -->
-  <script type="module">
-    import { IFCLoader } from "https://unpkg.com/web-ifc-three@0.0.43/IFCLoader.js";
-    window.IFCLoader = IFCLoader; // expõe global
-  </script>
+  <!-- IFC.js UMD (sem módulos ES6, direto no navegador) -->
+  <script src="https://unpkg.com/web-ifc-three@0.0.43/IFCLoader.umd.js"></script>
 
   <style>
     body { font-family: 'Inter', sans-serif; margin:0; padding:0; overflow:hidden; }
@@ -22,7 +17,7 @@
       z-index: 9999; background: rgba(255,255,255,0.95);
       padding: 20px; text-align: center;
     }
-    h1 { font-size: 1.4rem; margin: 0 0 10px; }
+    h1 { font-size: 1.2rem; margin: 0 0 10px; }
     .upload-button {
       background-color: #2563eb; color: white;
       padding: 10px 20px; border: none; border-radius: 6px;
@@ -32,28 +27,23 @@
   </style>
 </head>
 <body>
-  <div class="container" id="app-container">
-    <h1>Visualizador BIM em AR (IFC.js)</h1>
-    <p>Selecione um arquivo .IFC para visualizar em realidade aumentada.</p>
-    <label for="fileInput" class="upload-button">Selecionar Arquivo IFC</label>
+  <div class="container">
+    <h1>Visualizador BIM (IFC.js)</h1>
+    <p>Selecione um arquivo .IFC</p>
+    <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
     <input type="file" id="fileInput" accept=".ifc" style="display:none;">
     <div class="status-message" id="status"></div>
   </div>
 
-  <!-- Cena AR -->
-  <a-scene
-    id="ar-scene"
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
-  >
-    <a-entity id="model-container" position="0 0 -3" scale="0.01 0.01 0.01"></a-entity>
-    <a-entity camera></a-entity>
+  <!-- Cena A-Frame -->
+  <a-scene embedded>
+    <a-entity id="model-container" position="0 0 -5" scale="0.01 0.01 0.01"></a-entity>
+    <a-entity camera position="0 1.6 0"></a-entity>
+    <a-entity light="type:directional; intensity:1" position="2 4 2"></a-entity>
+    <a-entity light="type:ambient; intensity:0.5"></a-entity>
   </a-scene>
 
-  <script type="module">
-    import { IFCLoader } from "https://unpkg.com/web-ifc-three@0.0.43/IFCLoader.js";
-
+  <script>
     const fileInput = document.getElementById('fileInput');
     const statusDiv = document.getElementById('status');
     const modelContainer = document.getElementById('model-container');
@@ -66,24 +56,21 @@
 
       showStatus("Carregando arquivo IFC...");
 
-      // Instancia loader IFC.js
-      const ifcLoader = new IFCLoader();
-      ifcLoader.ifcManager.setWasmPath("https://unpkg.com/web-ifc@0.0.43/");
+      const loader = new IFCLoader(); // vem do UMD
+      loader.ifcManager.setWasmPath("https://unpkg.com/web-ifc@0.0.43/");
 
       const url = URL.createObjectURL(file);
 
       try {
-        const model = await ifcLoader.loadAsync(url);
-
-        // Limpa container antigo
-        while (modelContainer.object3D.children.length) {
-          modelContainer.object3D.remove(modelContainer.object3D.children[0]);
-        }
-
-        // Adiciona mesh IFC dentro do entity do A-Frame
-        modelContainer.object3D.add(model);
-
-        showStatus("Modelo IFC carregado!");
+        loader.load(url, (model) => {
+          // limpa modelo anterior
+          while (modelContainer.object3D.children.length) {
+            modelContainer.object3D.remove(modelContainer.object3D.children[0]);
+          }
+          // adiciona novo
+          modelContainer.object3D.add(model);
+          showStatus("Modelo IFC carregado!");
+        });
       } catch (err) {
         console.error(err);
         showStatus("Erro ao carregar o IFC.");

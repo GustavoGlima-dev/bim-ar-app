@@ -43,13 +43,12 @@
     embedded
     xr-mode-ui="enabled:true"
     webxr="optionalFeatures: hit-test,dom-overlay; overlayElement:#app-container; requiredFeatures: local-floor"
-    ar-hit-test="target: #webxrModel"
     vr-mode-ui="enabled:false"
     renderer="colorManagement:true;physicallyCorrectLights:true"
     style="display:none"
   >
     <a-entity light="type:hemisphere; intensity:1"></a-entity>
-    <a-entity id="webxrModel" visible="false"></a-entity>
+    <a-entity id="webxrModel"></a-entity>
     <a-entity camera></a-entity>
   </a-scene>
 
@@ -99,11 +98,12 @@
       if (!file) return;
       const url = URL.createObjectURL(file);
 
-      // WebXR
+      // WebXR → modelo já visível e à frente da câmera
       while (webxrModel.firstChild) webxrModel.removeChild(webxrModel.firstChild);
       webxrModel.setAttribute('gltf-model', url);
       webxrModel.setAttribute('scale', '0.05 0.05 0.05');
-      webxrModel.setAttribute('visible', 'false');
+      webxrModel.setAttribute('position', '0 0 -2');
+      webxrModel.setAttribute('visible', 'true');
 
       // GPS
       while (gpsModel.firstChild) gpsModel.removeChild(gpsModel.firstChild);
@@ -120,17 +120,6 @@
           showStatus("Erro GPS: " + err.message);
         });
       }
-    });
-
-    // Eventos WebXR
-    webxrScene.addEventListener('ar-hit-test-start', () => {
-      showStatus("Escaneando superfícies...");
-    });
-    webxrScene.addEventListener('ar-hit-test-achieved', () => {
-      showStatus("Superfície detectada! Toque para posicionar o modelo.");
-    });
-    webxrScene.addEventListener('ar-hit-test-select', () => {
-      showStatus("Modelo ancorado no espaço. Caminhe ao redor!");
     });
   </script>
 </body>

@@ -1,86 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Visualizador IFC.js</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-IFC Viewer</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
-        #file-input-container {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-        }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #viewer-container { width: 100vw; height: 100vh; background-color: #f0f0f0; display: flex; justify-content: center; align-items: center; }
+        #info { position: absolute; top: 10px; left: 10px; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        input[type="file"] { margin-top: 10px; }
     </style>
 </head>
 <body>
-
-    <div id="file-input-container">
-        <input type="file" id="file-input" accept=".ifc">
-        <p>Selecione um arquivo .ifc para visualizar.</p>
+    <div id="viewer-container">
+        <div id="info">
+            <h1>Carregar Modelo IFC</h1>
+            <input type="file" id="ifc-file-input" accept=".ifc" />
+            <p id="status">Aguardando arquivo IFC...</p>
+        </div>
+        <canvas id="three-canvas" style="display: none;"></canvas>
     </div>
 
+    <script src="./node_modules/web-ifc/web-ifc-api.js"></script>
+
     <script type="module">
-        import { IfcAPI } from "https://unpkg.com/web-ifc@0.0.41/";
-        import * as THREE from "https://unpkg.com/three@0.148.0/build/three.module.js";
-        import { OrbitControls } from "https://unpkg.com/three@0.148.0/examples/jsm/controls/OrbitControls.js";
+        import { IfcAPI } from './node_modules/web-ifc/web-ifc-api.js'; // Use import para módulos
+        // Se estiver usando CDN, você pode não precisar do import e IfcAPI estaria globalmente disponível
 
-        // Configuração da cena do Three.js
-        const scene = new THREE.Scene();
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
-        
-        // Câmera
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 10;
-        camera.position.y = 5;
-        camera.position.x = 5;
+        const ifcApi = new IfcAPI();
+        const ifcFileInput = document.getElementById('ifc-file-input');
+        const statusElement = document.getElementById('status');
+        const viewerContainer = document.getElementById('viewer-container');
+        const threeCanvas = document.getElementById('three-canvas');
 
-        // Controles de navegação
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        
-        // Iluminação
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
-        directionalLight.position.set(0, 10, 5);
-        scene.add(directionalLight);
+        // Um exemplo bem básico de configuração para visualização 3D com Three.js
+        // Para uma visualização completa, você precisaria de muito mais código Three.js.
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/controls/OrbitControls.js';
 
-        // Inicialização do IFC.js
-        const ifcAPI = new IfcAPI();
-        ifcAPI.Init();
+        let scene, camera, renderer, controls;
+        let modelID = null;
 
-        // Manipulação do carregamento do arquivo
-        const input = document.getElementById("file-input");
-        input.addEventListener("change", async (event) => {
-            const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
-            document.getElementById('file-input-container').style.display = 'none';
+        async function initThreeViewer() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xaaaaaa);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
 
-            const url = URL.createObjectURL(file);
-            const ifcModel = await ifcAPI.LoadIfcUrl(url);
-            scene.add(ifcModel);
-        });
+            renderer = new THREE.WebGLRenderer({ canvas: threeCanvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            viewerContainer.appendChild(renderer.domElement);
+            threeCanvas.style.display = 'block';
 
-        // Loop de renderização
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.25;
+
+            const light = new THREE.AmbientLight(0x404040); // soft white light
+            scene.add(light);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
+
+            animate();
+        }
+
         function animate() {
             requestAnimationFrame(animate);
-            controls.update(); // Atualiza os controles de navegação
+            controls.update();
             renderer.render(scene, camera);
         }
 
-        animate();
+        async function loadIfc(file) {
+            statusElement.textContent = "Carregando modelo IFC...";
+            if (modelID !== null) {
+                ifcApi.CloseModel(modelID);
+                scene.clear(); // Limpa a cena anterior
+            }
 
-        // Lidar com o redimensionamento da janela
+            try {
+                await ifcApi.Init({
+                    use      : WebIFC.IfcAPI.XKT_BUFFER,
+                    task       : WebIFC.IfcAPI.IfcWorker.worker, // Substitua IfcWorker pelo caminho real se necessário
+                    path       : './node_modules/web-ifc/' // Caminho para os arquivos web-ifc.wasm, etc.
+                });
+                statusElement.textContent = "IFC API inicializada.";
+
+                const arrayBuffer = await file.arrayBuffer();
+                const uint8Array = new Uint8Array(arrayBuffer);
+
+                modelID = ifcApi.OpenModel(uint8Array);
+                statusElement.textContent = `Modelo IFC carregado! ID: ${modelID}`;
+
+                // Exemplo: Obter a geometria do modelo (simplificado)
+                // Isso requer um "converter" do web-ifc para Three.js ou uma implementação manual
+                // Para simplificar, vamos apenas adicionar um cubo temporário como placeholder
+                // Uma implementação real precisaria iterar sobre as geometrias do IFC
+                // e convertê-las para objetos Three.js.
+                // Ex: ifcApi.Set';
+                // ifcApi.LoadAllGeometry(modelID);
+                // const geometry = ifcApi.Get ; // Isso é uma simplificação
+                // const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x0077ff }));
+                // scene.add(mesh);
+
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+                const cube = new THREE.Mesh(geometry, material);
+                scene.add(cube);
+                statusElement.textContent += " (Cubo placeholder adicionado. Implementação real requer conversão de geometria IFC.)";
+
+
+            } catch (error) {
+                statusElement.textContent = `Erro ao carregar ou processar IFC: ${error.message}`;
+                console.error("Erro web-ifc:", error);
+            }
+        }
+
+        ifcFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                if (!scene) {
+                    initThreeViewer();
+                }
+                loadIfc(file);
+            }
+        });
+
+        // Inicializa o viewer 3D quando a página carrega
+        window.addEventListener('load', initThreeViewer);
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
         });
 
     </script>

@@ -1,197 +1,88 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visualizador BIM em AR</title>
-
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- AR.js (abre câmera direto) -->
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  <!-- Gestos -->
-  <script src="https://unpkg.com/aframe-gesture-detector/dist/aframe-gesture-detector.min.js"></script>
-  <script src="https://unpkg.com/aframe-gesture-handler/dist/aframe-gesture-handler.min.js"></script>
-
-  <style>
-    body { font-family: 'Inter', sans-serif; margin:0; padding:0; overflow:hidden; }
-    .container {
-      position: absolute; top:0; left:0; right:0;
-      z-index: 9999; background: rgba(255,255,255,0.95);
-      padding: 20px; text-align: center;
-    }
-    h1 { font-size: 1.4rem; margin: 0 0 10px; }
-    .upload-button {
-      background-color: #2563eb; color: white;
-      padding: 10px 20px; border: none; border-radius: 6px;
-      cursor: pointer; font-size: 1rem; font-weight: 600;
-    }
-    .status-message { margin-top: 10px; font-size: 1rem; color: #0891b2; }
-  </style>
+    <title>Visualizador IFC.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #file-input-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
-  <div class="container" id="app-container">
-    <h1>Visualizador BIM</h1>
-    <p>Selecione um arquivo .GLTF ou .GLB para visualizar em realidade aumentada.</p>
-    <label for="fileInput" class="upload-button">Selecionar Arquivo</label>
-    <input type="file" id="fileInput" accept=".gltf,.glb" style="display:none;">
-    <div class="status-message" id="status"></div>
-  </div>
 
-  <!-- Cena AR -->
-  <a-scene 
-    id="ar-scene" 
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
-    gesture-detector
-  >
-    <a-entity id="model-container"></a-entity>
-    <a-entity camera></a-entity>
-  </a-scene>
+    <div id="file-input-container">
+        <input type="file" id="file-input" accept=".ifc">
+        <p>Selecione um arquivo .ifc para visualizar.</p>
+    </div>
 
-  <!-- Gestos iOS -->
-  <script>
-  AFRAME.registerComponent('ios-gestures', {
-    schema: { factor: {type: 'number', default: 0.002}, zoomFactor: {type: 'number', default: 0.005} },
-    init: function () {
-      const sceneEl = this.el.sceneEl;
-      let prevTouches = [];
+    <script type="module">
+        import { IfcAPI } from "https://unpkg.com/web-ifc@0.0.41/";
+        import * as THREE from "https://unpkg.com/three@0.148.0/build/three.module.js";
+        import { OrbitControls } from "https://unpkg.com/three@0.148.0/examples/jsm/controls/OrbitControls.js";
 
-      const getDistance = (t1, t2) => {
-        const dx = t1.clientX - t2.clientX;
-        const dy = t1.clientY - t2.clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-      };
+        // Configuração da cena do Three.js
+        const scene = new THREE.Scene();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        
+        // Câmera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 10;
+        camera.position.y = 5;
+        camera.position.x = 5;
 
-      sceneEl.addEventListener('touchstart', (e) => {
-        prevTouches = [...e.touches];
-      }, {passive: false});
+        // Controles de navegação
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        
+        // Iluminação
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(0, 10, 5);
+        scene.add(directionalLight);
 
-      sceneEl.addEventListener('touchmove', (e) => {
-        if (!prevTouches.length) {
-          prevTouches = [...e.touches];
-          return;
+        // Inicialização do IFC.js
+        const ifcAPI = new IfcAPI();
+        ifcAPI.Init();
+
+        // Manipulação do carregamento do arquivo
+        const input = document.getElementById("file-input");
+        input.addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            document.getElementById('file-input-container').style.display = 'none';
+
+            const url = URL.createObjectURL(file);
+            const ifcModel = await ifcAPI.LoadIfcUrl(url);
+            scene.add(ifcModel);
+        });
+
+        // Loop de renderização
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // Atualiza os controles de navegação
+            renderer.render(scene, camera);
         }
 
-        if (e.touches.length === 1 && prevTouches.length === 1) {
-          // Rotação com 1 dedo
-          const dx = e.touches[0].clientX - prevTouches[0].clientX;
-          const dy = e.touches[0].clientY - prevTouches[0].clientY;
-          this.el.object3D.rotation.y += dx * 0.01;
-          this.el.object3D.rotation.x += dy * 0.01;
-        }
+        animate();
 
-        if (e.touches.length === 2 && prevTouches.length === 2) {
-          // Zoom por pinça
-          const prevDist = getDistance(prevTouches[0], prevTouches[1]);
-          const newDist = getDistance(e.touches[0], e.touches[1]);
-          const scale = this.el.object3D.scale;
-          const factor = 1 + (newDist - prevDist) * this.data.zoomFactor;
-          scale.multiplyScalar(factor);
+        // Lidar com o redimensionamento da janela
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-          // Arrasto médio para mover
-          const dx = ((e.touches[0].clientX - prevTouches[0].clientX) +
-                     (e.touches[1].clientX - prevTouches[1].clientX)) / 2;
-          const dy = ((e.touches[0].clientY - prevTouches[0].clientY) +
-                     (e.touches[1].clientY - prevTouches[1].clientY)) / 2;
-          this.el.object3D.position.x += dx * this.data.factor;
-          this.el.object3D.position.y -= dy * this.data.factor;
-        }
-
-        prevTouches = [...e.touches];
-        e.preventDefault();
-      }, {passive: false});
-
-      sceneEl.addEventListener('touchend', (e) => {
-        prevTouches = [...e.touches];
-      });
-    }
-  });
-  </script>
-
-  <!-- Controles mouse (desktop) -->
-  <script>
-  function enableMouseControls(model) {
-    let isMouseDown = false;
-    let lastX = 0, lastY = 0;
-
-    window.addEventListener('mousedown', (e) => {
-      isMouseDown = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    });
-
-    window.addEventListener('mouseup', () => { isMouseDown = false; });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!isMouseDown || !model) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-
-      if (e.shiftKey) {
-        model.object3D.position.x += dx * 0.01;
-        model.object3D.position.y -= dy * 0.01;
-      } else {
-        model.object3D.rotation.y += dx * 0.01;
-        model.object3D.rotation.x += dy * 0.01;
-      }
-    });
-
-    window.addEventListener('wheel', (e) => {
-      if (!model) return;
-      const scale = model.object3D.scale;
-      const factor = e.deltaY < 0 ? 1.1 : 0.9;
-      scale.multiplyScalar(factor);
-    });
-  }
-  </script>
-
-  <!-- Upload e carregamento -->
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const statusDiv = document.getElementById('status');
-    const modelContainer = document.getElementById('model-container');
-    const appContainer = document.getElementById('app-container');
-
-    function showStatus(msg) { statusDiv.innerText = msg; }
-
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      showStatus('Carregando modelo...');
-      const url = URL.createObjectURL(file);
-
-      while (modelContainer.firstChild) modelContainer.removeChild(modelContainer.firstChild);
-
-      const model = document.createElement('a-entity');
-      model.setAttribute('gltf-model', url);
-      model.setAttribute('scale', '0.05 0.05 0.05');
-      model.setAttribute('position', '0 0 -3');
-      model.setAttribute('animation-mixer', '');
-
-      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        model.setAttribute('ios-gestures', '');
-      } else {
-        model.setAttribute('gesture-handler', 'minScale: 0.01; maxScale: 5');
-      }
-
-      model.addEventListener('model-loaded', () => {
-        showStatus('Modelo carregado! Interaja com mouse ou gestos.');
-        appContainer.style.display = 'none';
-        enableMouseControls(model); // desktop
-      });
-
-      model.addEventListener('model-error', err => {
-        console.error('Erro ao carregar modelo:', err);
-        showStatus('Erro ao carregar o modelo.');
-      });
-
-      modelContainer.appendChild(model);
-    });
-  </script>
+    </script>
 </body>
 </html>
